@@ -367,24 +367,29 @@ class P2PDevice:
 
         output = request.toBytes()
 
-        sent: int = s.send(output)
+        try:
+            sent: int = s.send(output)
 
-        if sent == len(output):
-            buffer: bytearray = bytearray(100)
+            if sent == len(output):
+                buffer: bytearray = bytearray(100)
 
-            result: int = s.recv_into(buffer)
+                result: int = s.recv_into(buffer)
 
+                s.close()
+
+                if result > 0:
+                    response = P2PResponse(buffer)
+                    if response.header == ord("$"):
+                        if response.packet == request.packet:
+                            return response
+                        raise P2PRequestError("Packet mismatch")
+                    raise P2PRequestError("Unexpected header")
+                raise P2PRequestError("Check private key")
+            raise P2PRequestError("Failed to send request")
+        except Exception as err:
+            raise P2PRequestError("Connection error") from err
+        finally:
             s.close()
-
-            if result > 0:
-                response = P2PResponse(buffer)
-                if response.header == ord("$"):
-                    if response.packet == request.packet:
-                        return response
-                    raise P2PRequestError("Packet mismatch")
-                raise P2PRequestError("Unexpected header")
-            raise P2PRequestError("Check private key")
-        raise P2PRequestError("Failed to send request")
 
 
 class ConnectionFailed(HomeAssistantError):
