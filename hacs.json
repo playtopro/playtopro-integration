@@ -1,0 +1,8 @@
+{
+  "name": "playtopro Integration",
+  "content_in_root": false,
+  "domains": ["playtopro"],
+  "country": "AU",
+  "homeassistant": "2026.1.0",
+  "render_readme": true
+}

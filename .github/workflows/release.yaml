@@ -1,0 +1,45 @@
+name: build-and-release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build card
+        run: npm run build
+        # Assumes rollup outputs to custom_components/playtopro/www/playtopro-card.js
+
+      - name: Verify bundle exists
+        run: |
+          test -f custom_components/playtopro/www/playtopro-card.js
+          ls -la custom_components/playtopro/www/
+
+      # Optional: attach the built JS to the GitHub release – not required for HACS
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            custom_components/playtopro/www/playtopro-card.js
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

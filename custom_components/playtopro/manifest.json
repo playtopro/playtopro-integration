@@ -1,0 +1,23 @@
+{
+  "domain": "playtopro",
+  "name": "Playtopro",
+  "codeowners": ["@playtopro"],
+  "config_flow": true,
+  "documentation": "https://github.com/playtopro/playtopro-integration",
+  
+  "frontend": {
+    "javascript": [
+      "www/playtopro-card.js"
+    ]
+  },
+  "iot_class": "device",
+  "issue_tracker": "https://github.com/playtopro/playtopro-integration/issues",
+  "loggers": ["custom_components.playtopro"],
+  "quality_scale": "internal",
+  "version": "2026.2.0",
+  "zeroconf": [
+    {
+      "type": "_playtopro._tcp.local."
+    }
+  ]
+}
