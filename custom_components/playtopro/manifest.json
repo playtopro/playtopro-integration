@@ -10,7 +10,7 @@
       "www/playtopro-card.js"
     ]
   },
-  "iot_class": "device",
+  "iot_class": "local_polling",
   "issue_tracker": "https://github.com/playtopro/playtopro-integration/issues",
   "loggers": ["custom_components.playtopro"],
   "quality_scale": "internal",
