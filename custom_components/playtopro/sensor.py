@@ -8,6 +8,7 @@ from homeassistant.const import CONF_HOST, PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import CONF_SERIAL_NUMBER
 from .coordinator import P2PDataUpdateCoordinator
 from .entity import P2PEntity
 from .P2PDevice import P2PStatusResponse, P2PZone
@@ -35,8 +36,8 @@ class P2PEcoModeFactor(P2PEntity, SensorEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'eco_mode_factor'}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = f"playtopro_{serial_number}_{'eco_mode_factor'}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -79,8 +80,8 @@ class P2PZoneSensor(P2PEntity, SensorEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'zone'}_{index:02d}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = f"playtopro_{serial_number}_{'zone'}_{index:02d}"
 
         self.index = index
 

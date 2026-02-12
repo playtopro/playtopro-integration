@@ -1,32 +1,51 @@
+
 {
+  "title": "Playtopro",
   "config": {
     "step": {
       "user": {
-        "title": "Add your lichen device to Home Assistant",
+        "title": "Add Playtopro device",
         "data": {
-          "host": "Host",
+          "host": "IP Address",
           "port": "Port",
-          "serial": "Serial Number"
+          "serial_number": "Serial number"
         }
+      },
+      "confirm": {
+        "title": "Add playtopro device",
+        "port": "Port",
+        "serial_number": "Serial number"
       }
     },
     "error": {
-      "invalid_ip_address": "[%key:component::ping::config::abort::invalid_ip_address%]",
-      "already_configured_device": "[%key:common::config_flow::abort::already_configured_device%]"
+      "invalid_ip_address": "Invalid IP address.",
+      "device_with_serial_number_already_added": "Device with matching serial number already added",
+      "invalid_port_must_be_numeric": "Invalid port number, must be numeric",
+      "invalid_serial_number_must_be_numeric": "Invalid serial number, must be numeric",
+      "serial_number_mismatch": "Serial number mismatch, check serial printed on your device",
+      "firmware_not_supported": "Device firmware not suppport, connect device to cloud to update",
+      "device_must_be_in_setup_mode_to_get_private_key": "Device must be in setup mode, press and hold mode button for 2 seconds",
+      "failed_to_get_private_key": "Failed to get private key, connect device to cloud for firmware update",
+      "cannot_connect": "Unable to connect to device, check wifi connection"
+
+    },
+    "abort": {
+      "device_already_added_details_updated": "Device already added, details updated",
+      "invalid_serial": "Invalid serial number."
     }
   },
   "options": {
     "step": {
       "init": {
+        "title": "Playtopro device configuration",
         "data": {
-          "host": "[%key:common::config_flow::data::host%]",
           "port": "Port",
-          "serial": "Serial Number"
+          "serial_number": "Serial number"
         }
       }
     },
     "abort": {
-      "invalid_ip_address": "[%key:component::ping::config::abort::invalid_ip_address%]"
+      "invalid_ip_address": "Invalid IP address."
     }
   }
 }

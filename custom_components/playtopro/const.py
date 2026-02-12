@@ -4,7 +4,7 @@ from datetime import timedelta
 import logging
 
 DOMAIN = "playtopro"
-CONF_SERIAL = "serial"
+CONF_SERIAL_NUMBER = "serial_number"
 CONF_FIRMWARE = "firmware"
 CONF_PRIVATE_KEY = "private_key"
 LOGGER = logging.getLogger(__package__)

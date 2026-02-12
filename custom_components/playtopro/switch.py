@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .coordinator import P2PDataUpdateCoordinator
 from .entity import P2PEntity
 from .P2PDevice import P2PStatusResponse, P2PZone
+from .const import CONF_SERIAL_NUMBER
 
 
 async def async_setup_entry(
@@ -40,8 +41,10 @@ class P2PZoneManualMode(P2PEntity, SwitchEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'zone_manual_mode'}_{index:02d}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = (
+                f"playtopro_{serial_number}_{'zone_manual_mode'}_{index:02d}"
+            )
 
         self.index = index
 
@@ -94,8 +97,8 @@ class P2PAutoMode(P2PEntity, SwitchEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'auto_mode'}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = f"playtopro_{serial_number}_{'auto_mode'}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -145,8 +148,10 @@ class P2PZoneAutoMode(P2PEntity, SwitchEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'zone_auto_mode'}_{index:02d}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = (
+                f"playtopro_{serial_number}_{'zone_auto_mode'}_{index:02d}"
+            )
         self.index = index
 
     @callback
@@ -196,8 +201,8 @@ class P2PEcoMode(P2PEntity, SwitchEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'eco_mode'}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = f"playtopro_{serial_number}_{'eco_mode'}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -248,8 +253,10 @@ class P2PZoneEcoMode(P2PEntity, SwitchEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'zone_eco_mode'}_{index:02d}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = (
+                f"playtopro_{serial_number}_{'zone_eco_mode'}_{index:02d}"
+            )
             self.index = index
 
     @callback
@@ -308,8 +315,10 @@ class P2PZoneSleepMode(P2PEntity, SwitchEntity):
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
-            self._attr_unique_id = f"{conf_host}_{'zone_sleep_mode'}_{index:02d}"
+            serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
+            self._attr_unique_id = (
+                f"playtopro_{serial_number}_{'zone_sleep_mode'}_{index:02d}"
+            )
             self.index = index
 
     @callback

@@ -16,7 +16,7 @@ class P2PEntity(CoordinatorEntity[P2PDataUpdateCoordinator]):
         super().__init__(coordinator)
 
         if self.coordinator.config_entry is not None:
-            conf_host: str = self.coordinator.config_entry.data[CONF_HOST]
+            serial_number: str = self.coordinator.config_entry.data["serial_number"]
 
             firmware: str = "unknown"
 
@@ -24,9 +24,10 @@ class P2PEntity(CoordinatorEntity[P2PDataUpdateCoordinator]):
                 firmware = self.coordinator.config_entry.data[CONF_FIRMWARE]
 
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, conf_host)},
+                identifiers={(DOMAIN, serial_number)},
                 model="lichen play",
                 manufacturer="playtopro",
-                name="lichen play",
+                name="serial_number",
                 sw_version=firmware,
             )
+            self._attr_unique_id = f"playtopro_{serial_number}"

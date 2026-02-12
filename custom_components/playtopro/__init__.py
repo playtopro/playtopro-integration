@@ -21,6 +21,10 @@
 # file permissions to allow the scripts to read the files.
 # You can do this by running:
 # sudo chown -R vscode ./playtopro
+# NOTE To have your translations inclided into Home Assistant
+# you must run:
+# python3 -m script.translations develop
+
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry

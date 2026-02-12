@@ -1,0 +1,49 @@
+{
+    "config": {
+        "abort": {
+            "device_already_added_details_updated": "Device already added, details updated",
+            "invalid_serial": "Invalid serial number."
+        },
+        "error": {
+            "cannot_connect": "Unable to connect to device, check wifi connection",
+            "device_must_be_in_setup_mode_to_get_private_key": "Device must be in setup mode, press and hold mode button for 2 seconds",
+            "device_with_serial_number_already_added": "Device with matching serial number already added",
+            "failed_to_get_private_key": "Failed to get private key, connect device to cloud for firmware update",
+            "firmware_not_supported": "Device firmware not suppport, connect device to cloud to update",
+            "invalid_ip_address": "Invalid IP address.",
+            "invalid_port_must_be_numeric": "Invalid port number, must be numeric",
+            "invalid_serial_number_must_be_numeric": "Invalid serial number, must be numeric",
+            "serial_number_mismatch": "Serial number mismatch, check serial printed on your device"
+        },
+        "step": {
+            "confirm": {
+                "port": "Port",
+                "serial_number": "Serial number",
+                "title": "Add playtopro device"
+            },
+            "user": {
+                "data": {
+                    "host": "IP Address",
+                    "port": "Port",
+                    "serial_number": "Serial number"
+                },
+                "title": "Add Playtopro device"
+            }
+        }
+    },
+    "options": {
+        "abort": {
+            "invalid_ip_address": "Invalid IP address."
+        },
+        "step": {
+            "init": {
+                "data": {
+                    "port": "Port",
+                    "serial_number": "Serial number"
+                },
+                "title": "Playtopro device configuration"
+            }
+        }
+    },
+    "title": "Playtopro"
+}

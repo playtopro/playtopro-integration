@@ -9,7 +9,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_SERIAL, CONF_PRIVATE_KEY, DOMAIN, LOGGER, SCAN_INTERVAL
+from .const import CONF_SERIAL_NUMBER, CONF_PRIVATE_KEY, DOMAIN, LOGGER, SCAN_INTERVAL
 from .P2PDevice import P2PConfirmationResponse, P2PDevice, P2PError, P2PStatusResponse
 
 
