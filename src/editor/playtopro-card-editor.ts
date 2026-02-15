@@ -3,7 +3,7 @@ import type { HomeAssistant, LovelaceCardEditor } from "custom-card-helpers";
 import type { PlayToProCardConfig } from "../playtopro-card";
 
 // Minimal device type for filtering (no internal HA types needed)
-type DeviceRegistryEntryLite = {
+type DeviceRegistryEntry = {
   id: string;
   model?: string;
   name?: string;
@@ -14,60 +14,40 @@ export class PlayToProCardEditor
   extends LitElement
   implements LovelaceCardEditor
 {
-  // React-style: explicit fields + Lit reactive property table
-  static properties = {
-    hass:   { attribute: false },
-    config: { attribute: false },
-  };
+  // --- HA-managed "props" ---
+  private _hass?: HomeAssistant; // backing field for getter/setter
+  private _config?: PlayToProCardConfig; // set via setConfig()
 
-  public hass!: HomeAssistant;
-  public config?: PlayToProCardConfig;
-  private _pickerReady = false;
-
-  static styles = css`
-    .card-config {
-      display: grid;
-      gap: 12px;
-      padding: 8px 0;
-    }
-  `;
-
-  /** HA calls this (may be slightly after first render). Be tolerant. */
-  public setConfig(config: PlayToProCardConfig): void {
-    this.config = config ?? { type: "playtopro-card", device_id: "" };
-    this.requestUpdate();
+  setConfig(config: PlayToProCardConfig): void {
+    this._config = config;
   }
 
-  // Only show devices whose model matches your controller
-  private _deviceFilter = (device: DeviceRegistryEntryLite): boolean =>
-    (device?.model ?? "").toLowerCase() === "lichen play"
+  private _deviceFilter = (device: DeviceRegistryEntry): boolean =>
+    device.model === "lichen play";
 
-  protected render() {
-    // First render can happen before setConfig() → show a tiny placeholder
-    if (!this.config) {
-      return html`<div class="card-config"><p>Loading editor…</p></div>`;
-    }
+  render() {
+    if (!this._config) return nothing;
 
     return html`
       <div class="card-config">
-        <ha-selector
-            .hass=${this.hass}
-            .value=${this.config.device_id}
-            .selector=${{ 
-                device: { 
-                filter: { model: "lichen play" } 
-                } 
-            }}
-            @value-changed=${this._onDeviceChanged}
-        ></ha-selector>
+        <ha-device-picker
+          .hass=${this._hass}
+          .value=${this._config.device_id}
+          .deviceFilter=${this._deviceFilter}
+          @value-changed=${this._deviceChanged}
+        ></ha-device-picker>
       </div>
     `;
   }
 
-  private _onDeviceChanged = (ev: CustomEvent<{ value?: string }>) => {
-    const device_id = ev.detail?.value ?? "";
-    this.config = { ...(this.config ?? { type: "playtopro-card" }), device_id };
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this.config } }));
+  private _deviceChanged = (ev: CustomEvent<{ value: string }>) => {
+    const deviceId = ev.detail.value;
+    this._config = { ...this._config!, device_id: deviceId };
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+      })
+    );
   };
 }
 
