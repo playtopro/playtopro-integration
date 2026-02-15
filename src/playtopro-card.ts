@@ -442,10 +442,12 @@ export class PlaytoproCard extends LitElement {
     return document.createElement("playtopro-card-editor");
   }
 
-  // Card picker stub
-  public static getStubConfig(): PlayToProCardConfig {
-    return { type: "custom:playtopro-card", device_id: "" };
+
+  public static getStubConfig() {
+    // IMPORTANT: no "type" here
+    return { device_id: "" };
   }
+
 }
 
 // Register the element
@@ -463,6 +465,6 @@ declare global {
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "playtopro-card",
-  name: "Playtopro Card",
-  description: "Organize and control lichen play zones.",
+  name: "playtopro card",
+  description: "Organize and control lichen play devices.",
 });

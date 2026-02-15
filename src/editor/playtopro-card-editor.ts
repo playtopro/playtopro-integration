@@ -18,6 +18,11 @@ export class PlayToProCardEditor
   private _hass?: HomeAssistant; // backing field for getter/setter
   private _config?: PlayToProCardConfig; // set via setConfig()
 
+  set hass(hass: HomeAssistant) {
+    this._hass = hass;
+    this.requestUpdate();
+  }
+
   setConfig(config: PlayToProCardConfig): void {
     this._config = config;
   }
