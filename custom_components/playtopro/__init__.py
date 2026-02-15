@@ -35,6 +35,9 @@ from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN
 from .coordinator import P2PDataUpdateCoordinator
 
+# NEW: import the helper functions
+from .frontend import JSModuleRegistration
+
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -42,11 +45,18 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up lichen playtopro from a config entry."""
+
+    # Register static path so /playtopro/playtopro-card.js is served
+
     hass.data.setdefault(DOMAIN, {})
     entry.runtime_data = P2PDataUpdateCoordinator(hass, entry=entry)
     await entry.runtime_data.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Register custom cards
+    module_register = JSModuleRegistration(hass)
+    await module_register.async_register()
 
     return True
 

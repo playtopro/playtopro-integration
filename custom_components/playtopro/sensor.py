@@ -3,6 +3,7 @@
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
@@ -29,7 +30,8 @@ async def async_setup_entry(
 class P2PEcoModeFactor(P2PEntity, SensorEntity):
     """P2P Sensor."""
 
-    ICON: str = "mdi:water-percent"
+    _attr_icon = "mdi:water-percent"
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: P2PDataUpdateCoordinator) -> None:
         """Initializes the Switch."""
@@ -37,7 +39,9 @@ class P2PEcoModeFactor(P2PEntity, SensorEntity):
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = f"playtopro_{serial_number}_{'eco_mode_factor'}"
+            self._attr_unique_id = f"{serial_number}_eco_mode_factor"
+            self._attr_name = "Eco Mode Factor"
+            self._attr_native_unit_of_measurement = PERCENTAGE
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -48,31 +52,12 @@ class P2PEcoModeFactor(P2PEntity, SensorEntity):
 
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return "Eco Mode Factor"
 
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return "Percentage runtime based on weather data"
-
-    @property
-    def unit_of_measure(self) -> str:
-        """Get the unit of Measure."""
-        return PERCENTAGE
-
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend, if any."""
-        return self.ICON
-
-
-class P2PZoneSensor(P2PEntity, SensorEntity):
+class P2PZoneSensor(P2PEntity, BinarySensorEntity):
     """P2P Sensor."""
 
-    ICON: str = "mdi:sprinkler"
+    _attr_icon = "mdi:sprinkler"
+    _attr_has_entity_name = True
     index: int
 
     def __init__(self, coordinator: P2PDataUpdateCoordinator, index: int) -> None:
@@ -81,7 +66,8 @@ class P2PZoneSensor(P2PEntity, SensorEntity):
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = f"playtopro_{serial_number}_{'zone'}_{index:02d}"
+            self._attr_unique_id = f"{serial_number}_zone_{index:02d}"
+            self._attr_name = f"Zone {(index + 1):02d}"
 
         self.index = index
 
@@ -91,29 +77,10 @@ class P2PZoneSensor(P2PEntity, SensorEntity):
             if self.coordinator.data["status"]:
                 status_response: P2PStatusResponse = self.coordinator.data["status"]
                 zone: P2PZone = status_response.zones[self.index]
-                self._attr_native_value = zone.on
+                self._attr_is_on = zone.on
 
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return f"{'Zone '}{(self.index + 1):02d}"
-
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return f"{'ON/Off status of '}{self.name}"
-
-    @property
-    def unit_of_measure(self) -> str:
-        """Get the unit of Measure."""
-        return PERCENTAGE
-
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend, if any."""
-        return self.ICON
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

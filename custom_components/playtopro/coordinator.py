@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import copy
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
@@ -72,9 +73,13 @@ class P2PDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Check the result and update the stored status for the device
             if response.result:
-                if self.status_response:
+                if self.status_response is not None:
                     self.status_response.zones[zone].manual_mode_active = state
                     self.async_set_updated_data({"status": self.status_response})
+
+                # Always reconcile with device truth
+                self.async_request_refresh()
+
                 return True
             return False
 

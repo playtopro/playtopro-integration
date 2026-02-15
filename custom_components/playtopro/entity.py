@@ -27,7 +27,6 @@ class P2PEntity(CoordinatorEntity[P2PDataUpdateCoordinator]):
                 identifiers={(DOMAIN, serial_number)},
                 model="lichen play",
                 manufacturer="playtopro",
-                name="serial_number",
+                name=f"PlayToPro {serial_number}",
                 sw_version=firmware,
             )
-            self._attr_unique_id = f"playtopro_{serial_number}"

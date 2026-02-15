@@ -31,15 +31,15 @@ jobs:
 
       - name: Verify bundle exists
         run: |
-          test -f custom_components/playtopro/www/playtopro-card.js
-          ls -la custom_components/playtopro/www/
+          test -f custom_components/playtopro/frontend/playtopro-card.js
+          ls -la custom_components/playtopro/frontend/
 
       # Optional: attach the built JS to the GitHub release – not required for HACS
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            custom_components/playtopro/www/playtopro-card.js
+            custom_components/playtopro/frontend/playtopro-card.js
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

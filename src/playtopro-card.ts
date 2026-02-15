@@ -5,7 +5,6 @@
 import { LitElement, html, css } from "lit";
 import type { HassEntity } from "home-assistant-js-websocket";
 import type { HomeAssistant, LovelaceCardConfig } from "custom-card-helpers";
-import "./editor/playtopro-card-editor";
 
 // ---------------- Types ----------------
 
@@ -16,7 +15,7 @@ export interface PlayToProCardConfig extends LovelaceCardConfig {
 export interface GroupConfig {
   name: string;
   icon: string;
-  entity_id?: string;
+  entity_original_name?: string;
   information?: string;
   entities: string[];
 }
@@ -39,75 +38,78 @@ const entityConfig: PlayToProConfig = {
   eco_mode_factor: "sensor.eco_mode_factor",
   eco_mode: "switch.eco_mode",
   zones: [
-    "sensor.zone_01",
-    "sensor.zone_02",
-    "sensor.zone_03",
-    "sensor.zone_04",
-    "sensor.zone_05",
-    "sensor.zone_06",
-    "sensor.zone_07",
-    "sensor.zone_08",
+    "Zone 01",
+    "Zone 02",
+    "Zone 03",
+    "Zone 04",
+    "Zone 05",
+    "Zone 06",
+    "Zone 07",
+    "Zone 08",
   ],
   groups: [
     {
       name: "Auto Mode",
       icon: "mdi:checkbox-marked-circle-auto-outline",
-      entity_id: "switch.auto_mode",
+      entity_original_name: "Auto Mode",
       information:
         "Turn on to use the schedule set in the lichen play app, turn off to schedule using Home Assistant",
       entities: [
-        "switch.zone_01_auto_mode",
-        "switch.zone_02_auto_mode",
-        "switch.zone_03_auto_mode",
-        "switch.zone_04_auto_mode",
-        "switch.zone_05_auto_mode",
-        "switch.zone_06_auto_mode",
-        "switch.zone_07_auto_mode",
-        "switch.zone_08_auto_mode",
+        "Zone 01 Auto Mode",
+        "Zone 02 Auto Mode",
+        "Zone 03 Auto Mode",
+        "Zone 04 Auto Mode",
+        "Zone 05 Auto Mode",
+        "Zone 06 Auto Mode",
+        "Zone 07 Auto Mode",
+        "Zone 08 Auto Mode",
       ],
     },
     {
       name: "Eco Mode",
       icon: "mdi:leaf",
-      entity_id: "switch.eco_mode",
-      information: "Turn on eco mode to save water during cooler and wet weather",
+      entity_original_name: "Eco Mode",
+      information:
+        "Turn on eco mode to save water during cooler and wet weather",
       entities: [
-        "switch.zone_01_eco_mode",
-        "switch.zone_02_eco_mode",
-        "switch.zone_03_eco_mode",
-        "switch.zone_04_eco_mode",
-        "switch.zone_05_eco_mode",
-        "switch.zone_06_eco_mode",
-        "switch.zone_07_eco_mode",
-        "switch.zone_08_eco_mode",
+        "Zone 01 Eco Mode",
+        "Zone 02 Eco Mode",
+        "Zone 03 Eco Mode",
+        "Zone 04 Eco Mode",
+        "Zone 05 Eco Mode",
+        "Zone 06 Eco Mode",
+        "Zone 07 Eco Mode",
+        "Zone 08 Eco Mode",
       ],
     },
-    {
-      name: "Sleep Mode",
-      icon: "mdi:sleep",
-      entities: [
-        "switch.zone_01_sleep_mode",
-        "switch.zone_02_sleep_mode",
-        "switch.zone_03_sleep_mode",
-        "switch.zone_04_sleep_mode",
-        "switch.zone_05_sleep_mode",
-        "switch.zone_06_sleep_mode",
-        "switch.zone_07_sleep_mode",
-        "switch.zone_08_sleep_mode",
-      ],
-    },
+    //{
+    //  name: "Sleep Mode",
+    //  icon: "mdi:sleep",
+    //  entities: [
+    //    "Zone 01 Sleep Mode",
+    //    "Zone 02 Sleep Mode",
+    //    "Zone 03 Sleep Mode",
+    //    "Zone 04 Sleep Mode",
+    //    "Zone 05 Sleep Mode",
+    //    "Zone 06 Sleep Mode",
+    //    "Zone 07 Sleep Mode",
+    //    "Zone 08 Sleep Mode",
+    //  ],
+    //},
     {
       name: "Manual Mode",
       icon: "mdi:run",
+      information:
+        "Manual run allows you to directly control each zone, use these in your HA automation",
       entities: [
-        "switch.zone_01_manual_mode",
-        "switch.zone_02_manual_mode",
-        "switch.zone_03_manual_mode",
-        "switch.zone_04_manual_mode",
-        "switch.zone_05_manual_mode",
-        "switch.zone_06_manual_mode",
-        "switch.zone_07_manual_mode",
-        "switch.zone_08_manual_mode",
+        "Zone 01 Manual Mode",
+        "Zone 02 Manual Mode",
+        "Zone 03 Manual Mode",
+        "Zone 04 Manual Mode",
+        "Zone 05 Manual Mode",
+        "Zone 06 Manual Mode",
+        "Zone 07 Manual Mode",
+        "Zone 08 Manual Mode",
       ],
     },
   ],
@@ -133,10 +135,18 @@ export class PlaytoproCard extends LitElement {
       vertical-align: middle;
     }
     @keyframes pulse {
-      0% { opacity: 1; }
-      30% { opacity: 0.4; }
-      50% { opacity: 1; }
-      100% { opacity: 1; }
+      0% {
+        opacity: 1;
+      }
+      30% {
+        opacity: 0.4;
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 1;
+      }
     }
     ha-icon.pulsing {
       animation: pulse 2.5s infinite;
@@ -152,8 +162,8 @@ export class PlaytoproCard extends LitElement {
   `;
 
   // --- HA-managed "props" ---
-  private _hass?: HomeAssistant;           // backing field for getter/setter
-  private _config?: PlayToProCardConfig;   // set via setConfig()
+  private _hass?: HomeAssistant; // backing field for getter/setter
+  private _config?: PlayToProCardConfig; // set via setConfig()
 
   // --- Your internal "state" ---
   private _selectedGroup: number;
@@ -163,7 +173,7 @@ export class PlaytoproCard extends LitElement {
   constructor() {
     super();
     // Initialize state (React constructor style)
-    this._selectedGroup = 0;
+    this._selectedGroup = entityConfig.groups.length - 1;
     this._deviceEntities = [];
   }
 
@@ -186,20 +196,21 @@ export class PlaytoproCard extends LitElement {
 
   public set hass(next: HomeAssistant) {
     if (this._hass !== next) {
-        this._hass = next;
+      this._hass = next;
 
-        if (this._deviceId && this._deviceEntities.length === 0) {
-            this.loadEntities();
-        }
+      if (this._deviceId && this._deviceEntities.length === 0) {
+        this.loadEntities();
+      }
 
-        this.requestUpdate();
+      this.requestUpdate();
     }
-}
+  }
 
   // Lovelace calls this exactly once with the card configuration (React: "receive initial props")
   public setConfig(config: PlayToProCardConfig): void {
     console.log("setConfig called");
-    if (config.device_id === undefined) throw new Error("device_id is required");
+    if (config.device_id === undefined)
+      throw new Error("device_id is required");
     this._config = config;
     this._deviceId = config.device_id;
   }
@@ -209,10 +220,14 @@ export class PlaytoproCard extends LitElement {
     if (!this._hass || !this._deviceId) return;
 
     try {
-      const entities = await this._hass.callWS<any[]>({ type: "config/entity_registry/list" });
-      this._deviceEntities = entities.filter((e) => e.device_id === this._deviceId);
+      const entities = await this._hass.callWS<any[]>({
+        type: "config/entity_registry/list",
+      });
+      this._deviceEntities = entities.filter(
+        (e) => e.device_id === this._deviceId
+      );
     } catch {
-    } finally { 
+    } finally {
       this.requestUpdate();
     }
   }
@@ -257,19 +272,22 @@ export class PlaytoproCard extends LitElement {
     const information = el.dataset.information?.trim();
     if (!information) return;
 
-    const evt = new CustomEvent<ShowNotificationEventDetail>("hass-notification", {
-      detail: { message: information, duration: 8000 },
-      bubbles: true,
-      composed: true,
-    });
+    const evt = new CustomEvent<ShowNotificationEventDetail>(
+      "hass-notification",
+      {
+        detail: { message: information, duration: 8000 },
+        bubbles: true,
+        composed: true,
+      }
+    );
     this.dispatchEvent(evt);
   };
 
   private _getIconForState(value: string): string {
     switch ((value ?? "").toLowerCase()) {
-      case "true":
+      case "on":
         return "mdi:sprinkler-variant";
-      case "false":
+      case "off":
         return "mdi:sprout";
       default:
         return "mdi:help-circle";
@@ -281,9 +299,13 @@ export class PlaytoproCard extends LitElement {
     const entityId = input.dataset.entityId;
     if (!entityId || !this._hass) return;
 
-    await this._hass.callService("switch", input.checked ? "turn_on" : "turn_off", {
-      entity_id: entityId,
-    });
+    await this._hass.callService(
+      "switch",
+      input.checked ? "turn_on" : "turn_off",
+      {
+        entity_id: entityId,
+      }
+    );
     // HA state update will come via hass setter; requestUpdate() is harmless here
     this.requestUpdate();
   }
@@ -291,7 +313,6 @@ export class PlaytoproCard extends LitElement {
   // --- render (React: render()) ---
 
   protected render() {
-
     if (this._deviceEntities.length === 0) {
       return html`<ha-card><div>Loading entities…</div></ha-card>`;
     }
@@ -299,15 +320,20 @@ export class PlaytoproCard extends LitElement {
       return html`<ha-card><div>Waiting for Home Assistant…</div></ha-card>`;
     }
     if (this._config.device_id === undefined) {
-      return html`<ha-card><div>No device configured, check yaml...</div></ha-card>`;
+      return html`<ha-card
+        ><div>No device configured, check yaml...</div></ha-card
+      >`;
     }
     if (this._config.device_id === "") {
       return html`<ha-card><div>No device selected...</div></ha-card>`;
     }
 
-    const groupCfg: GroupConfig = entityConfig.groups[this._selectedGroup];
-    const groupEntityState: HassEntity | undefined = groupCfg.entity_id
-      ? this._hass.states[groupCfg.entity_id]
+    let groupCfg: GroupConfig = entityConfig.groups[this._selectedGroup];
+    let groupEntity = groupCfg.entity_original_name ? this._deviceEntities.find(
+      (e) => e.original_name === groupCfg.entity_original_name
+    ) : undefined;
+    let groupEntityState: HassEntity | undefined = groupEntity
+      ? this._hass.states[groupEntity.entity_id]
       : undefined;
 
     return html`
@@ -331,10 +357,14 @@ export class PlaytoproCard extends LitElement {
               ${groupEntityState
                 ? html`
                     <ha-switch
-                      .checked=${groupEntityState.state === "on"}
-                      data-entity-id=${groupCfg.entity_id ?? ""}
+                      .checked=${groupEntityState?.state === "on"}
+                      data-entity-id=${groupEntity?.entity_id ?? ""}
                       @change=${this._toggleEntity}
-                    ></ha-switch>
+                    ></ha-switch>`
+                : html``
+              }
+              ${groupCfg.information
+                ? html `
                     <ha-icon
                       role="img"
                       aria-label="Information"
@@ -342,44 +372,54 @@ export class PlaytoproCard extends LitElement {
                       icon="mdi:information"
                       data-information=${groupCfg.information ?? ""}
                       @click=${this._informationClicked}
-                    ></ha-icon>
-                  `
-                : html``}
+                    ></ha-icon>`
+                : html``
+              }
             </div>
           </div>
 
-          ${entityConfig.zones.map((zoneId, index) => {
+          ${entityConfig.zones.map((zone_original_name, index) => {
             // Only show zone rows for entities that belong to this device
-            const zoneEntry = this._deviceEntities.find((e) => e.entity_id === zoneId);
-            if (!zoneEntry) return html``;
+            const zoneEntity = this._deviceEntities.find(
+              (e) => e.original_name === zone_original_name
+            );
+            if (!zoneEntity) return html``;
 
-            const zoneState: HassEntity | undefined = this._hass!.states[zoneId];
-            const groupZoneId = entityConfig.groups[this._selectedGroup].entities[index];
-            const groupZoneState: HassEntity | undefined = groupZoneId
-              ? this._hass!.states[groupZoneId]
+            const zoneState: HassEntity | undefined =
+              this._hass!.states[zoneEntity.entity_id];
+            const groupZoneEntityOriginalName = groupCfg.entities[index];
+            const groupZoneEntity = this._deviceEntities.find(
+              (e) => e.original_name === groupZoneEntityOriginalName
+            );
+
+            if (!groupZoneEntity) return html``;
+
+            const groupZoneEnitityState: HassEntity | undefined = groupZoneEntity
+              ? this._hass!.states[groupZoneEntity.entity_id]
               : undefined;
 
-            if (!zoneState || !groupZoneId || !groupZoneState) return html``;
+            if (!zoneState || !groupZoneEnitityState) return html``;
 
             return html`
               <div class="entity">
                 <span
                   style="cursor:pointer"
                   @click=${this._entityClicked}
-                  data-entity-id=${zoneId}
+                  data-entity-id=${zoneEntity.entity_id}
                 >
-                  ${zoneState.attributes.friendly_name ?? zoneId}
+                  ${zoneState.attributes.friendly_name ?? zone_original_name}
                 </span>
                 <div style="display:flex;align-items:center;">
                   <ha-switch
-                    .checked=${groupZoneState.state === "on"}
+                    .checked=${groupZoneEnitityState.state === "on"}
                     .disabled=${groupEntityState?.state === "off"}
-                    data-entity-id=${groupZoneId}
+                    data-entity-id=${groupZoneEntity.entity_id}
                     @change=${this._toggleEntity}
                   ></ha-switch>
                   <ha-icon
                     role="img"
-                    aria-label="${(zoneState.attributes.friendly_name ?? zoneId)} is ${zoneState.state}"
+                    aria-label="${zoneState.attributes.friendly_name ??
+                    zone_original_name} is ${zoneState.state}"
                     icon=${this._getIconForState(zoneState.state)}
                   ></ha-icon>
                 </div>

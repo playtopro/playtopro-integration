@@ -4,7 +4,6 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -33,7 +32,8 @@ async def async_setup_entry(
 class P2PZoneManualMode(P2PEntity, SwitchEntity):
     """P2P Zone manual mode."""
 
-    ICON: str = "mdi:run"
+    _attr_icon = "mdi:run"
+    _attr_has_entity_name = True
     index: int
 
     def __init__(self, coordinator: P2PDataUpdateCoordinator, index: int) -> None:
@@ -42,9 +42,8 @@ class P2PZoneManualMode(P2PEntity, SwitchEntity):
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = (
-                f"playtopro_{serial_number}_{'zone_manual_mode'}_{index:02d}"
-            )
+            self._attr_unique_id =  f"{serial_number}_zone_manual_mode_{index:02d}"
+            self._attr_name = f"Zone {(index + 1):02d} Manual Mode"
 
         self.index = index
 
@@ -52,15 +51,6 @@ class P2PZoneManualMode(P2PEntity, SwitchEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return f"{'Zone '}{(self.index + 1):02d}{' Manual Mode'}"
-
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return f"{'Manual mode '}{self.name}"
 
     @property
     def is_on(self) -> bool | None:
@@ -71,26 +61,20 @@ class P2PZoneManualMode(P2PEntity, SwitchEntity):
             return zone.manual_mode_active
         return None
 
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend."""
-        return self.ICON
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn zone on."""
         await self.coordinator.async_set_zone_manual_mode(self.index, True)
-        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn zone off."""
         await self.coordinator.async_set_zone_manual_mode(self.index, False)
-        await self.coordinator.async_request_refresh()
 
 
 class P2PAutoMode(P2PEntity, SwitchEntity):
     """P2P auto mode."""
 
-    ICON: str = "mdi:checkbox-marked-circle-auto-outline"
+    _attr_icon = "mdi:checkbox-marked-circle-auto-outline"
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: P2PDataUpdateCoordinator) -> None:
         """Initializes the Switch."""
@@ -98,21 +82,13 @@ class P2PAutoMode(P2PEntity, SwitchEntity):
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = f"playtopro_{serial_number}_{'auto_mode'}"
+            self._attr_unique_id = f"{serial_number}_auto_mode"
+            self._attr_name = "Auto Mode"
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return "Auto Mode"
-
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return "Run the devices own scheduled"
 
     @property
     def is_on(self) -> bool | None:
@@ -123,10 +99,6 @@ class P2PAutoMode(P2PEntity, SwitchEntity):
                 return status_response.system_auto
         return None
 
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend."""
-        return self.ICON
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable auto mode."""
@@ -140,33 +112,26 @@ class P2PAutoMode(P2PEntity, SwitchEntity):
 class P2PZoneAutoMode(P2PEntity, SwitchEntity):
     """P2P Zone auto mode."""
 
-    ICON: str = "mdi:checkbox-marked-circle-auto-outline"
+    _attr_icon = "mdi:checkbox-marked-circle-auto-outline"
+    _attr_has_entity_name = True
     index: int
 
-    def __init__(self, coordinator, index: int) -> None:
+    def __init__(self, coordinator: P2PDataUpdateCoordinator, index: int) -> None:
         """Initializes the Switch."""
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = (
-                f"playtopro_{serial_number}_{'zone_auto_mode'}_{index:02d}"
-            )
+            self._attr_unique_id = f"{serial_number}_zone_auto_mode_{index:02d}"
+
+            self._attr_name = f"Zone {(index + 1):02d} Auto Mode"
+
         self.index = index
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return f"{'Zone '}{(self.index + 1):02d}{' Auto Mode'}"
-
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return f"{'Auto mode'}{self.name}"
 
     @property
     def is_on(self) -> bool | None:
@@ -176,11 +141,6 @@ class P2PZoneAutoMode(P2PEntity, SwitchEntity):
                 status_response: P2PStatusResponse = self.coordinator.data["status"]
                 return status_response.zones[self.index].auto_mode
         return None
-
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend."""
-        return self.ICON
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable zone auto mode."""
@@ -194,29 +154,23 @@ class P2PZoneAutoMode(P2PEntity, SwitchEntity):
 class P2PEcoMode(P2PEntity, SwitchEntity):
     """P2P eco mode."""
 
-    ICON: str = "mdi:leaf"
+    _attr_icon = "mdi:leaf"
+    _attr_has_entity_name = True
 
-    def __init__(self, coordinator) -> None:
+    def __init__(self, coordinator: P2PDataUpdateCoordinator) -> None:
         """Initializes the Switch."""
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = f"playtopro_{serial_number}_{'eco_mode'}"
+            self._attr_unique_id = f"{serial_number}_eco_mode"
+
+            self._attr_name = "Eco Mode"
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return "Eco Mode"
-
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return "Run the devices own scheduled"
 
     @property
     def is_on(self) -> bool | None:
@@ -227,10 +181,6 @@ class P2PEcoMode(P2PEntity, SwitchEntity):
                 return status_response.eco_mode
         return None
 
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend."""
-        return self.ICON
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable eco mode."""
@@ -238,40 +188,30 @@ class P2PEcoMode(P2PEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable eco mode."""
-        p2p_coordinator: P2PDataUpdateCoordinator = self.coordinator
-        await p2p_coordinator.async_set_eco_mode(False)
+        await self.coordinator.async_set_eco_mode(False)
 
 
 class P2PZoneEcoMode(P2PEntity, SwitchEntity):
     """P2P Zone eco mode."""
 
-    ICON: str = "mdi:leaf"
+    _attr_icon = "mdi:leaf"
+    _attr_has_entity_name = True
     index: int
 
-    def __init__(self, coordinator, index: int) -> None:
+    def __init__(self, coordinator: P2PDataUpdateCoordinator, index: int) -> None:
         """Initializes the Switch."""
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = (
-                f"playtopro_{serial_number}_{'zone_eco_mode'}_{index:02d}"
-            )
-            self.index = index
+            self._attr_unique_id = f"{serial_number}_zone_eco_mode_{index:02d}"
+            self._attr_name = f"Zone {(index + 1):02d} Eco Mode"
+        self.index = index
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return f"{'Zone '}{(self.index + 1):02d}{' Eco Mode'}"
-
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return f"{'Eco mode'}{self.name}"
 
     @property
     def is_on(self) -> bool | None:
@@ -282,58 +222,35 @@ class P2PZoneEcoMode(P2PEntity, SwitchEntity):
                 return status_response.zones[self.index].eco_mode
         return None
 
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend."""
-        return self.ICON
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable zone eco mode."""
-        result: bool = await self.coordinator.async_set_zone_eco_mode(self.index, True)
-
-        if result:
-            self._attr_is_on = True
-            self.async_write_ha_state()
+        await self.coordinator.async_set_zone_eco_mode(self.index, True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable zone eco mode."""
-        result: bool = await self.coordinator.async_set_zone_eco_mode(self.index, False)
-
-        if result:
-            self._attr_is_on = False
-            self.async_write_ha_state()
+        await self.coordinator.async_set_zone_eco_mode(self.index, False)
 
 
 class P2PZoneSleepMode(P2PEntity, SwitchEntity):
     """P2P Zone sleep mode."""
 
-    ICON: str = "mdi:sleep"
+    _attr_icon: str = "mdi:sleep"
+    _attr_has_entity_name = True
     index: int
 
-    def __init__(self, coordinator, index: int) -> None:
+    def __init__(self, coordinator: P2PDataUpdateCoordinator, index: int) -> None:
         """Initializes the Switch."""
         super().__init__(coordinator)
         # Setup unique ID for this entity
         if self.coordinator.config_entry is not None:
             serial_number: str = self.coordinator.config_entry.data[CONF_SERIAL_NUMBER]
-            self._attr_unique_id = (
-                f"playtopro_{serial_number}_{'zone_sleep_mode'}_{index:02d}"
-            )
-            self.index = index
+            self._attr_unique_id = f"{serial_number}_zone_sleep_mode_{index:02d}"
+            self._attr_name = f"Zone {(index + 1):02d} Sleep Mode"
+        self.index = index
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
-
-    @property
-    def name(self) -> str:
-        """Get the name."""
-        return f"{'Zone '}{(self.index + 1):02d}{' Sleep Mode'}"
-
-    @property
-    def description(self) -> str:
-        """Get the description name."""
-        return f"{'Sleep mode'}{self.name}"
 
     @property
     def is_on(self) -> bool | None:
@@ -344,27 +261,12 @@ class P2PZoneSleepMode(P2PEntity, SwitchEntity):
                 return status_response.zones[self.index].sleep_mode
         return None
 
-    @property
-    def icon(self) -> str | None:
-        """Icon to use in the frontend."""
-        return self.ICON
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable zone sleep mode."""
-        result: bool = await self.coordinator.async_set_zone_sleep_mode(
-            self.index, True
-        )
+        await self.coordinator.async_set_zone_sleep_mode( self.index, True )
 
-        if result:
-            self._attr_is_on = True
-            self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable zone sleep mode."""
-        result: bool = await self.coordinator.async_set_zone_sleep_mode(
-            self.index, False
-        )
-
-        if result:
-            self._attr_is_on = False
-            self.async_write_ha_state()
+        await self.coordinator.async_set_zone_sleep_mode(self.index, False)
