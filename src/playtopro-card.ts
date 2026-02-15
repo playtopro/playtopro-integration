@@ -5,6 +5,7 @@
 import { LitElement, html, css } from "lit";
 import type { HassEntity } from "home-assistant-js-websocket";
 import type { HomeAssistant, LovelaceCardConfig } from "custom-card-helpers";
+import "./editor/playtopro-card-editor";
 
 // ---------------- Types ----------------
 

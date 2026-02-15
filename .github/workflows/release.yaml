@@ -27,7 +27,7 @@ jobs:
 
       - name: Build card
         run: npm run build
-        # Assumes rollup outputs to custom_components/playtopro/www/playtopro-card.js
+        # Assumes rollup outputs to custom_components/playtopro/frontend/playtopro-card.js
 
       - name: Verify bundle exists
         run: |
