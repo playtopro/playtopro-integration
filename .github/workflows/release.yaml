@@ -17,25 +17,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build card
-        run: npm run build
-        # Assumes rollup outputs to custom_components/playtopro/frontend/playtopro-card.js
-
-      - name: Verify bundle exists
+      - name: Verify prebuilt bundle exists in tag
         run: |
           test -f custom_components/playtopro/frontend/playtopro-card.js
           ls -la custom_components/playtopro/frontend/
+          echo "✅ Found prebuilt playtopro-card.js in tagged commit"
 
-      # Optional: attach the built JS to the GitHub release – not required for HACS
-      - name: Create GitHub Release
+      - name: Create GitHub Release (attach prebuilt JS)
         uses: softprops/action-gh-release@v2
         with:
           files: |

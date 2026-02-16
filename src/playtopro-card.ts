@@ -1,6 +1,41 @@
+
 // src/playtopro-card.ts
-// A React-style (class + constructor + explicit state) custom Lovelace card.
-// No decorators, no Babel needed. Bundles to a single ES module for HACS.
+//
+// Release process (IMPORTANT: order matters)
+//
+// To create a new release:
+//
+// 1. Update version in custom_components/playtopro/manifest.json
+//    - This is the version HACS and Home Assistant use.
+//
+// 2. Update version in package.json
+//    - Used for local/npm tooling only (not required by HACS, but recommended).
+//
+// 3. Update version in custom_components/playtopro/const.ts
+//    - Used for display (e.g. card picker, logging). Optional but recommended.
+//
+// 4. Run the build to update the bundled frontend JS:
+//      npm run build
+//    - This must update:
+//      custom_components/playtopro/frontend/playtopro-card.js
+//
+// 5. Commit and push ALL changes (including the built JS):
+//      git add .
+//      git commit -m "Release vYYYY.M.X"
+//      git push
+//
+// 6. Create and push a Git tag that points to THIS commit:
+//      git tag vYYYY.M.X
+//      git push origin vYYYY.M.X
+//
+// 7. The GitHub Actions release workflow will run automatically:
+//    - It creates the GitHub Release from the tag
+//    - The tagged source already contains the correct built JS
+//    - No build happens in CI (source and release stay consistent)
+//
+// ⚠️ Do NOT rebuild or modify files after tagging.
+//    Tags must always point to the exact code that is released.
+
 
 import { LitElement, html, css } from "lit";
 import type { HassEntity } from "home-assistant-js-websocket";
