@@ -36,10 +36,10 @@
 // ⚠️ Do NOT rebuild or modify files after tagging.
 //    Tags must always point to the exact code that is released.
 
-
 import { LitElement, html, css } from "lit";
 import type { HassEntity } from "home-assistant-js-websocket";
 import type { HomeAssistant, LovelaceCardConfig } from "custom-card-helpers";
+//import type PlayToProCardEditor from "../editor/playtopro-card-editor"
 import "./editor/playtopro-card-editor";
 
 // ---------------- Types ----------------
@@ -245,10 +245,11 @@ export class PlaytoproCard extends LitElement {
   // Lovelace calls this exactly once with the card configuration (React: "receive initial props")
   public setConfig(config: PlayToProCardConfig): void {
     console.log("setConfig called");
-    if (config.device_id === undefined)
-      throw new Error("device_id is required");
-    this._config = config;
-    this._deviceId = config.device_id;
+    //if (config.device_id && config.device_id !== "")
+    //{
+      this._config = config;
+      this._deviceId = config.device_id;
+    //}
   }
 
   // Async initializer for device + entities
@@ -349,19 +350,22 @@ export class PlaytoproCard extends LitElement {
   // --- render (React: render()) ---
 
   protected render() {
-    if (this._deviceEntities.length === 0) {
-      return html`<ha-card><div>Loading entities…</div></ha-card>`;
+    if (!this._hass) {
+      return html`<ha-card><div>Waiting for Home Assistant...</div></ha-card>`;
     }
-    if (!this._hass || !this._config) {
-      return html`<ha-card><div>Waiting for Home Assistant…</div></ha-card>`;
+    else if (!this._config) {
+      return html`<ha-card><div>No configuration...</div></ha-card>`;
     }
-    if (this._config.device_id === undefined) {
+    else if (this._config.device_id === undefined) {
       return html`<ha-card
         ><div>No device configured, check yaml...</div></ha-card
       >`;
     }
-    if (this._config.device_id === "") {
+    else if (this._config.device_id === "") {
       return html`<ha-card><div>No device selected...</div></ha-card>`;
+    }
+    else if (this._deviceEntities.length === 0) {
+      return html`<ha-card><div>Loading entities...</div></ha-card>`;
     }
 
     let groupCfg: GroupConfig = entityConfig.groups[this._selectedGroup];
@@ -473,12 +477,12 @@ export class PlaytoproCard extends LitElement {
   }
 
   // Lovelace editor factory
-  static async getConfigElement() {
+  public static getConfigElement(): HTMLElement {
     return document.createElement("playtopro-card-editor");
   }
 
 
-  public static getStubConfig() {
+  public static getStubConfig(): { device_id: string } {
     // IMPORTANT: no "type" here
     return { device_id: "" };
   }

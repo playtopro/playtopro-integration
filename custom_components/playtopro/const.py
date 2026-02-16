@@ -16,6 +16,6 @@ JSMODULES = [
     {
         "name": "Playtopro Card",
         "filename": "playtopro-card.js",
-        "version": "2026.2.11",
+        "version": "2026.2.12",
     }
 ]

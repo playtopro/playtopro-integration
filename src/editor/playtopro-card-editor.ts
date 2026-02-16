@@ -14,6 +14,8 @@ export class PlayToProCardEditor
   extends LitElement
   implements LovelaceCardEditor
 {
+
+
   // --- HA-managed "props" ---
   private _hass?: HomeAssistant; // backing field for getter/setter
   private _config?: PlayToProCardConfig; // set via setConfig()
@@ -25,32 +27,36 @@ export class PlayToProCardEditor
 
   setConfig(config: PlayToProCardConfig): void {
     this._config = config;
+    this.requestUpdate();
   }
-
-  private _deviceFilter = (device: DeviceRegistryEntry): boolean =>
-    device.model === "lichen play";
 
   render() {
     if (!this._config) return nothing;
 
     return html`
       <div class="card-config">
-        <ha-device-picker
-          .hass=${this._hass}
-          .value=${this._config.device_id}
-          .deviceFilter=${this._deviceFilter}
-          @value-changed=${this._deviceChanged}
-        ></ha-device-picker>
+        <ha-selector
+            .hass=${this._hass}
+            .value=${this._config.device_id}
+            .selector=${{
+                device: {
+                filter: { model: "lichen play" }
+                }
+            }}
+            @value-changed=${this._onDeviceChanged}
+        ></ha-selector>
       </div>
     `;
   }
 
-  private _deviceChanged = (ev: CustomEvent<{ value: string }>) => {
+  private _onDeviceChanged = (ev: CustomEvent<{ value: string }>) => {
     const deviceId = ev.detail.value;
     this._config = { ...this._config!, device_id: deviceId };
     this.dispatchEvent(
       new CustomEvent("config-changed", {
         detail: { config: this._config },
+        bubbles: true,
+        composed: true,
       })
     );
   };
