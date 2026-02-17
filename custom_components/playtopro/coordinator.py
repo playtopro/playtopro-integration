@@ -59,8 +59,8 @@ class P2PDataUpdateCoordinator(DataUpdateCoordinator):
 
             data: dict[str, Any] = {}
             data["status"] = self.status_response
-        except P2PError as error:
-            raise UpdateFailed(f"Invalid response from API: {error}") from error
+        except P2PError as e:
+            raise UpdateFailed(f"Unable to update data: {e.error}") from e
         else:
             return data
 

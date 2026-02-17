@@ -16,8 +16,9 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
-from .const import CONF_FIRMWARE, CONF_SERIAL_NUMBER, CONF_PRIVATE_KEY, DOMAIN
+from .const import CONF_FIRMWARE, CONF_SERIAL_NUMBER, DOMAIN
 from .P2PFlowBase import P2PFlowBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,44 +57,22 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
     ) -> ConfigFlowResult:
         _LOGGER.debug("Zeroconf discovery received: %s", discovery_info)
 
+        # 1) Load discovered information
         host: str = discovery_info.host
         port: int = int(discovery_info.port)
-        serial_number: int = int(discovery_info.properties.get("serial"))
+        serial_number: str = discovery_info.properties.get("serial")
         firmware: int = int(discovery_info.properties.get("firmware"))
 
-        # ---------------------------------------------------------
-        # If device already exists, update IP and reload integration
-        # ---------------------------------------------------------
-        for entry in self._async_current_entries():
-            registered_serial_number: int = int(entry.data.get(CONF_SERIAL_NUMBER))
+        # 2) Bind this discovery to a stable unique_id
+        await self.async_set_unique_id(serial_number)
 
-            if registered_serial_number == serial_number:
-                registered_host: str = entry.data.get(CONF_HOST)
+        # 3) If already configured, update host/firmware and abort
+        updates = {CONF_HOST: host, CONF_PORT: port, CONF_FIRMWARE: firmware}
 
-                if registered_host != host:
-                    _LOGGER.warning(
-                        "Playtopro device %d IP changed: %s → %s",
-                        serial_number,
-                        registered_host,
-                        host,
-                    )
+        # 4) This will abort if the unique_id already exists, and apply updates in the entry
+        self._abort_if_unique_id_configured(updates=updates)
 
-                    new_data = {**entry.data, CONF_HOST: host, CONF_FIRMWARE: firmware}
-                    self.hass.config_entries.async_update_entry(entry, data=new_data)
-
-                    await self.hass.config_entries.async_reload(entry.entry_id)
-
-                    # Always abort for existing devices
-                    return self.async_abort(
-                        reason="device_already_added_details_updated"
-                    )
-
-                # Always abort for existing devices
-                return self.async_abort(reason="device_already_added")
-
-        # ---------------------------------------------------------
-        # New device → continue to confirmation
-        # ---------------------------------------------------------
+        # 5) Otherwise ask user to confirm
         self._discovered_info = {
             CONF_HOST: host,
             CONF_PORT: port,
@@ -119,6 +98,11 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
             if await self._async_validate_input(
                 errors, host, port, serial_number, self._async_current_entries()
             ):
+                # Bind this config to a stable unique_id
+                await self.async_set_unique_id(str(serial_number))
+
+                self._abort_if_unique_id_configured()
+
                 data: dict[str, Any] | None = await self._async_validate_device(
                     errors, host, port, serial_number
                 )
@@ -164,6 +148,9 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
             if await self._async_validate_input(
                 errors, host, port, serial_number, self._async_current_entries()
             ):
+                # Bind this config to a stable unique_id
+                await self.async_set_unique_id(str(serial_number))
+
                 data: dict[str, Any] | None = await self._async_validate_device(
                     errors, host, int(port), int(serial_number)
                 )
