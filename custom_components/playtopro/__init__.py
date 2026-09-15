@@ -8,17 +8,24 @@
 # Then, tell home assistant to bypass the check.
 # Locate script/hassfest/quality_scale.py
 # Locate INTEGRATIONS_WITHOUT_SCALE, and add the domain name - playtopro.
-# To confirm, rerun the following can you should get a pass:
+# To confirm, rerun the following and you should get a pass:
 # python3 -m script.hassfest --integration-path ./homeassistant/components/playtopro
 # NOTE you must run this from the hacore folder.
 # Finally, to have your integration included, run:
 # python3 -m script.hassfest
 # NOTE you must run this from the hacore folder.
 # To confirm that your integration in now available, check:
-# /workspaces/hacore/homeassistant/generated/config_flows.py
-# Your integratioin should appear in the list of integrations.
-# If you have imported your files using docker desktop, you need to adjust the
-# file permissions to allow the scripts to read the files.
+# from the UI, go to Configuration -> Integrations, and click the + button. You should see your integration listed.
+# Devices announce via zeroconfig (mDNS). Since HA is hosted inside a docker container, you need to emulate zeroconfig from the command line.
+# From the terminal inside the docker container, install run:
+# sudo apt update
+# sudo apt install avahi-utils
+# sudo mkdir -p /run/dbus
+# sudo dbus-daemon --system --fork
+# sudo avahi-daemon --no-chroot
+# Now from a separate terminal, run the following command to announce your device:
+# avahi-publish-service "lichen" _playtopro._tcp 1233 "serial=123456" "firmware=28"
+
 # You can do this by running:
 # sudo chown -R vscode ./playtopro
 # NOTE To have your translations inclided into Home Assistant

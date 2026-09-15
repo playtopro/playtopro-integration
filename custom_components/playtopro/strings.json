@@ -13,8 +13,10 @@
       },
       "confirm": {
         "title": "Add playtopro device",
-        "port": "Port",
-        "serial_number": "Serial number"
+        "data": {
+          "port": "Port",
+          "serial_number": "Serial number"
+        }
       }
     },
     "error": {

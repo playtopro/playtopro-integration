@@ -17,6 +17,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Rewrite manifest.json for release
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          jq --arg ver "$VERSION" '
+            .version = $ver
+          ' custom_components/playtopro/manifest.json > manifest.release.json
+          mv manifest.release.json custom_components/playtopro/manifest.json
+        shell: bash
+
       - name: Verify prebuilt bundle exists in tag
         run: |
           test -f custom_components/playtopro/frontend/playtopro-card.js

@@ -7,3 +7,4 @@ dist/
 .rollup.cache
 .idea/
 .vscode/*
+__pycache__

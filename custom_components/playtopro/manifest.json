@@ -3,16 +3,15 @@
   "name": "Playtopro",
   "codeowners": ["@playtopro"],
   "config_flow": true,
-  "documentation": "https://github.com/playtopro/playtopro-integration",
+  "dependencies": ["http", "frontend", "lovelace"],
+  "documentation": "https://www.home-assistant.io/integrations/playtopro-integration",
+  "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/playtopro/playtopro-integration/issues",
   "loggers": ["custom_components.playtopro"],
   "quality_scale": "internal",
-  "version": "2026.2.13",
   "zeroconf": [
     {
       "type": "_playtopro._tcp.local."
     }
-  ],
-  "dependencies": ["http", "frontend", "lovelace"]
+  ]
 }
