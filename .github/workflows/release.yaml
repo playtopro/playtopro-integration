@@ -17,15 +17,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
-          cd ..
-          cp frontend/dist/playtopro-card.js custom_components/playtopro/frontend/playtopro-card.js
-        shell: bash
-
       - name: Rewrite manifest.json for release
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
@@ -35,13 +26,13 @@ jobs:
           mv manifest.release.json custom_components/playtopro/manifest.json
         shell: bash
 
-      - name: Verify prebuilt bundle exists in tag
+      - name: Verify card exists
         run: |
           test -f custom_components/playtopro/frontend/playtopro-card.js
           ls -la custom_components/playtopro/frontend/
-          echo "✅ Found prebuilt playtopro-card.js in tagged commit"
+          echo "✅ Found playtopro-card.js in tagged commit"
 
-      - name: Create GitHub Release (attach prebuilt JS)
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
