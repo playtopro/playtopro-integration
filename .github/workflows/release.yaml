@@ -32,12 +32,11 @@ jobs:
           ls -la custom_components/playtopro/frontend/
           echo "✅ Found playtopro-card.js in tagged commit"
 
-      # 3. Compress the folder from the root of 'custom_components'
-      # This ensures the zip structure starts with the 'playtopro/' root directory
+      # 3. Zip the contents from INSIDE custom_components/playtopro
       - name: Archive production artifacts
         run: |
-          cd custom_components
-          zip -r ../playtopro.zip playtopro/
+          cd custom_components/playtopro
+          zip -r ../../playtopro.zip ./*
         shell: bash
 
       # 4. Upload your production artifacts directly to the GitHub Release
