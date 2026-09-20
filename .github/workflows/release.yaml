@@ -17,6 +17,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cd ..
+          cp frontend/dist/playtopro-card.js custom_components/playtopro/frontend/playtopro-card.js
+        shell: bash
+
       - name: Rewrite manifest.json for release
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
