@@ -3,6 +3,7 @@ name: build-and-release
 on:
   push:
     tags:
+      - "v*.*.*"
       - "v*.*.*.*"
 
 permissions:
