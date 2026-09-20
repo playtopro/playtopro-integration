@@ -3,6 +3,7 @@
 from array import array
 import socket
 
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
 
@@ -259,14 +260,17 @@ class P2PDevice:
     ipv4: str
     port: int
     private_key: int
+    hass: HomeAssistant
 
     def __init__(
         self,
+        hass: HomeAssistant,
         ipv4: str,
         port: int,
         private_key: int,
     ) -> None:
         """Initialize the API and store the auth so we can make requests."""
+        self.hass = hass
         self.ipv4 = ipv4
         self.port = port
         self.private_key = private_key
@@ -354,6 +358,10 @@ class P2PDevice:
         return P2PConfirmationResponse(response, request.packet)
 
     async def async_get_response(self, request: P2PRequest) -> P2PResponse:
+        """Send a request to the device asynchronously."""
+        return await self.hass.async_add_executor_job(self.sync_get_response, request)
+
+    def sync_get_response(self, request: P2PRequest) -> P2PResponse:
         """Send a request to the device."""
 
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -361,7 +369,7 @@ class P2PDevice:
         try:
             s.connect((self.ipv4, self.port))
         except Exception as err:
-            raise P2PRequestError("Connection failed") from err
+            raise P2PRequestError("Failed to get response, connection failed") from err
 
         # print(request.toBytes())
 
@@ -383,8 +391,10 @@ class P2PDevice:
                         return response
                     raise P2PRequestError("Packet mismatch")
                 raise P2PRequestError("Unexpected header")
-            raise P2PRequestError("Check private key")
-        raise P2PRequestError("Failed to send request")
+            raise P2PRequestError(
+                "Failed to get response, no data received, check private key"
+            )
+        raise P2PRequestError("Failed to get response, unable to send request")
 
 
 class ConnectionFailed(HomeAssistantError):

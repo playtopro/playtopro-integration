@@ -44,9 +44,16 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        super().__init__()
+        # Required so HA doesn't complain about dynamic attributes
+        self._discovered_info: dict[str, Any] | None = None
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Get the options flow for this handler."""
         return P2POptionsFlowHandler(config_entry)
 
     # -----------------------------------------------------------------------
@@ -55,6 +62,7 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
+        """Handle zeroconf discovery of a Lichen PlayToPro device."""
         _LOGGER.debug("Zeroconf discovery received: %s", discovery_info)
 
         # 1) Load discovered information
@@ -66,13 +74,47 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
         # 2) Bind this discovery to a stable unique_id
         await self.async_set_unique_id(serial_number)
 
-        # 3) If already configured, update host/firmware and abort
-        updates = {CONF_HOST: host, CONF_PORT: port, CONF_FIRMWARE: firmware}
+        # 3) Check if this device already has a config entry
+        existing_entries = self._async_current_entries()
+        if existing_entries:
+            entry = existing_entries[0]
 
-        # 4) This will abort if the unique_id already exists, and apply updates in the entry
-        self._abort_if_unique_id_configured(updates=updates)
+            # Determine if anything actually changed
+            changed = False
 
-        # 5) Otherwise ask user to confirm
+            if entry.data.get(CONF_HOST) != host:
+                changed = True
+            if entry.data.get(CONF_PORT) != port:
+                changed = True
+            if entry.data.get(CONF_FIRMWARE) != firmware:
+                changed = True
+
+            if changed:
+                _LOGGER.debug(
+                    "Zeroconf update detected for %s: host=%s port=%s firmware=%s",
+                    serial_number,
+                    host,
+                    port,
+                    firmware,
+                )
+
+                updates = {
+                    CONF_HOST: host,
+                    CONF_PORT: port,
+                    CONF_FIRMWARE: firmware,
+                }
+
+                # This updates the entry and aborts the flow
+                self._abort_if_unique_id_configured(updates=updates)
+
+            # No changes → abort quietly without reload
+            _LOGGER.debug(
+                "Zeroconf discovery for %s but no changes detected; aborting",
+                serial_number,
+            )
+            return self.async_abort(reason="already_configured")
+
+        # 4) New device → store discovery info and ask user to confirm
         self._discovered_info = {
             CONF_HOST: host,
             CONF_PORT: port,
@@ -88,6 +130,7 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Handle the confirmation step for a Lichen PlayToPro device."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -138,6 +181,7 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Handle the user step for a Lichen PlayToPro device."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -185,11 +229,13 @@ class P2POptionsFlowHandler(OptionsFlow, P2PFlowBase):
     """Handle PlayToPro options."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize the options flow."""
         self.entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Handle the options step for a Lichen PlayToPro device."""
         errors: dict[str, str] = {}
 
         if user_input is not None:

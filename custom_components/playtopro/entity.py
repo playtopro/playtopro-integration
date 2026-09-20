@@ -3,8 +3,8 @@
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_FIRMWARE, DOMAIN
-from .coordinator import CONF_SERIAL_NUMBER, P2PDataUpdateCoordinator
+from .const import CONF_FIRMWARE, CONF_SERIAL_NUMBER, DOMAIN
+from .coordinator import P2PDataUpdateCoordinator
 
 
 class P2PEntity(CoordinatorEntity[P2PDataUpdateCoordinator]):

@@ -51,28 +51,31 @@ class P2PFlowBase:
         # The only request that is valid when the serial is passed as the private key
         # is get_firmware. If the device is also in setup mode, the private key will
         # be appended to the end of the packet and will be saved into the configuration.
-        hub = P2PDevice(ipv4=host, port=port, private_key=serial_number)
+        hub = P2PDevice(hass=self.hass, ipv4=host, port=port, private_key=serial_number)
 
         try:
-            firmwareResponse: P2PFirmwareResponse = await hub.async_get_firmware()
+            firmware_response: P2PFirmwareResponse = await hub.async_get_firmware()
 
-            if firmwareResponse.serial_number != serial_number:
+            if firmware_response.serial_number != serial_number:
                 errors["base"] = "serial_number_mismatch"
 
-            elif firmwareResponse.firmware < 28:
+            elif firmware_response.firmware < 28:
                 errors["base"] = "firmware_not_supported"
 
-            elif firmwareResponse.mode == 0:
+            elif firmware_response.mode == 0:
                 errors["base"] = "device_must_be_in_setup_mode_to_get_private_key"
 
-            elif firmwareResponse.private_key == 0:
+            elif firmware_response.private_key == 0:
                 errors["base"] = "failed_to_get_private_key"
 
             else:
                 try:
                     # Validate private key / connectivity
                     hub = P2PDevice(
-                        ipv4=host, port=port, private_key=firmwareResponse.private_key
+                        hass=self.hass,
+                        ipv4=host,
+                        port=port,
+                        private_key=firmware_response.private_key,
                     )
                     await hub.async_get_status()
 
@@ -80,8 +83,8 @@ class P2PFlowBase:
                         CONF_HOST: host,
                         CONF_PORT: port,
                         CONF_SERIAL_NUMBER: serial_number,
-                        CONF_PRIVATE_KEY: firmwareResponse.private_key,
-                        CONF_FIRMWARE: firmwareResponse.firmware,
+                        CONF_PRIVATE_KEY: firmware_response.private_key,
+                        CONF_FIRMWARE: firmware_response.firmware,
                     }
                 except P2PError as err:
                     errors["base"] = err.error
