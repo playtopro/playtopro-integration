@@ -17,25 +17,35 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 1. Modify the file locally inside the runner workspace (uncommitted)
       - name: Rewrite manifest.json for release
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
-          jq --arg ver "$VERSION" '
-            .version = $ver
-          ' custom_components/playtopro/manifest.json > manifest.release.json
+          jq --arg ver "$VERSION" '.version = $ver' custom_components/playtopro/manifest.json > manifest.release.json
           mv manifest.release.json custom_components/playtopro/manifest.json
         shell: bash
 
+      # 2. Safety check to make sure your custom card asset exists
       - name: Verify card exists
         run: |
           test -f custom_components/playtopro/frontend/playtopro-card.js
           ls -la custom_components/playtopro/frontend/
           echo "✅ Found playtopro-card.js in tagged commit"
 
+      # 3. Compress the folder from the root of 'custom_components'
+      # This ensures the zip structure starts with the 'playtopro/' root directory
+      - name: Archive production artifacts
+        run: |
+          cd custom_components
+          zip -r ../playtopro.zip playtopro/
+        shell: bash
+
+      # 4. Upload your production artifacts directly to the GitHub Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            playtopro.zip
             custom_components/playtopro/frontend/playtopro-card.js
           generate_release_notes: true
         env:
