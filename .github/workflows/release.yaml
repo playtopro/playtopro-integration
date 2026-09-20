@@ -19,7 +19,7 @@ jobs:
 
       - name: Rewrite manifest.json for release
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
+          VERSION="${GITHUB_REF#refs/tags/v}"
           jq --arg ver "$VERSION" '
             .version = $ver
           ' custom_components/playtopro/manifest.json > manifest.release.json
