@@ -121,6 +121,8 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
             CONF_SERIAL_NUMBER: serial_number,
             CONF_FIRMWARE: firmware,
         }
+        # ✅ CHANGE THIS LINE: Add the serial number dynamically to the tile name string
+        self.context["title_placeholders"] = {"name": f"Lichen {serial_number}"}
 
         return await self.async_step_confirm()
 
