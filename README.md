@@ -1,8 +1,10 @@
 # Playtopro Home Assistant Integration
 
-A custom **Home Assistant integration** for **Playtopro / Lichen Play** devices.
+A custom **Home Assistant integration** for **Playtopro / Lichen Play** devices, a WiFi enabled 8 zone sprinkler controller.
 
 This integration allows Home Assistant to automatically discover, configure, and control Playtopro devices on your local network using **mDNS (Zeroconf)**. It is distributed as a **custom repository via HACS**.
+
+The integration also includes a custom UI card for best user experience.
 
 ---
 
@@ -65,6 +67,28 @@ The device will be added automatically.
 - Release the button and allow the device to reboot
 - The mode LED will remain **on**, indicating normal operation
 
+
+**Add the Playtopro Card to Your Dashboard:**
+
+The integration includes a custom Lovelace card. Home Assistant registers it automatically.
+
+To add it to a dashboard:
+
+Go to Overview
+
+Click ⋮ → Edit dashboard
+
+Click Add card
+
+Select By Card
+
+Search for Playtopro
+
+Select Playtopro Device Card
+
+Choose your Playtopro device from the drop down and click save
+
+That’s it — the card will appear and update automatically.
 ---
 
 ### Manual Setup
