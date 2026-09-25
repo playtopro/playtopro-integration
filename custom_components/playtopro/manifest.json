@@ -13,5 +13,10 @@
     {
       "type": "_playtopro._tcp.local."
     }
-  ]
+  ],
+  "frontend": {
+    "extra_module_url": [
+      "/custom_components/playtopro/frontend/playtopro-card.js"
+    ]
+  }
 }
