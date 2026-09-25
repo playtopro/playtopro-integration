@@ -89,6 +89,7 @@ Select Playtopro Device Card
 Choose your Playtopro device from the drop down and click save
 
 That’s it — the card will appear and update automatically.
+
 ---
 
 ### Manual Setup
