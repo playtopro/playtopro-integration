@@ -8,4 +8,4 @@ dist/
 .idea/
 .vscode/*
 __pycache__
-frontend/
+custom_components/playtopro/frontend/playtopro-card.js
