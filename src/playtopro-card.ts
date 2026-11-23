@@ -6,9 +6,11 @@
 //
 // 1. Merge the changes to main and push.
 //
-// 2. Create and push a tag for the release:
-//      git tag vYYYY.M.X
-//      git push origin vYYYY.M.X
+// 2. Create and push a tag named after the release date, vYYYY.M.D with no
+//    zero padding (e.g. v2026.9.25). Add a letter for a second release on
+//    the same day (e.g. v2026.9.20a):
+//      git tag vYYYY.M.D
+//      git push origin vYYYY.M.D
 //
 // 3. The workflow then:
 //    - runs "npm ci" and "npm run build" (the minified production build)
