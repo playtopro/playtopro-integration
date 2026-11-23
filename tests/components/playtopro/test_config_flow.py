@@ -69,6 +69,7 @@ async def test_user_flow_success(hass: HomeAssistant) -> None:
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == f"Lichen {SERIAL}"
     assert result["data"] == EXPECTED_DATA
     assert result["result"].unique_id == str(SERIAL)
 
@@ -177,6 +178,10 @@ async def test_zeroconf_new_device(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
+    # The discovery card is named after the device.
+    (progress,) = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert progress["context"]["title_placeholders"] == {"name": f"Lichen {SERIAL}"}
+
     defaults = {
         str(key): key.default() for key in result["data_schema"].schema
     }
@@ -186,6 +191,8 @@ async def test_zeroconf_new_device(hass: HomeAssistant) -> None:
         result["flow_id"], USER_INPUT
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Same title as manual setup.
+    assert result["title"] == f"Lichen {SERIAL}"
     assert result["data"] == EXPECTED_DATA
     assert result["result"].unique_id == str(SERIAL)
 

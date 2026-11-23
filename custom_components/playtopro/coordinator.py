@@ -75,9 +75,10 @@ class P2PDataUpdateCoordinator(DataUpdateCoordinator):
                     self.status_response.zones[zone].manual_mode_active = state
                     self.async_set_updated_data({"status": self.status_response})
 
-                # Always reconcile with device truth
-                await self.async_request_refresh()
-
+                # Don't refresh immediately: the device takes 1-4 seconds to
+                # apply the change, so an immediate status read returns the
+                # old state and the switch flips back. The regular poll
+                # reconciles with the device instead.
                 return True
             return False
 
