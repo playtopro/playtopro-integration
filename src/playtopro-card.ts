@@ -1,41 +1,31 @@
 // src/playtopro-card.ts
 //
-// Release process (IMPORTANT: order matters)
+// Release process
 //
-// To create a new release:
+// Releases are built by .github/workflows/release.yaml when a tag is pushed:
 //
-// 1. Update version in custom_components/playtopro/manifest.json
-//    - This is the version HACS and Home Assistant use.
+// 1. Merge the changes to main and push.
 //
-// 2. Update version in package.json
-//    - Used for local/npm tooling only (not required by HACS, but recommended).
+// 2. Create and push a tag named after the release date, vYYYY.M.D with no
+//    zero padding (e.g. v2026.9.25). Add a letter for a second release on
+//    the same day (e.g. v2026.9.20a):
+//      git tag vYYYY.M.D
+//      git push origin vYYYY.M.D
 //
-// 3. Update version in custom_components/playtopro/const.ts
-//    - Used for display (e.g. card picker, logging). Optional but recommended.
+// 3. The workflow then:
+//    - runs "npm ci" and "npm run build" (the minified production build)
+//    - writes the tag's version into manifest.json, const.py (JSMODULES) and
+//      package.json. The const.py version is the ?v= cache-busting query on
+//      the Lovelace resource, so every release makes browsers fetch the new
+//      card.
+//    - zips custom_components/playtopro and creates the GitHub Release
 //
-// 4. Run the build to update the bundled frontend JS:
-//      npm run build
-//    - This must update:
-//      custom_components/playtopro/frontend/playtopro-card.js
-//
-// 5. Commit and push ALL changes (including the built JS):
-//      git add .
-//      git commit -m "Release vYYYY.M.X"
-//      git push
-//
-// 6. Create and push a Git tag that points to THIS commit:
-//      git tag vYYYY.M.X
-//      git push origin vYYYY.M.X
-//
-// 7. The GitHub Actions release workflow will run automatically:
-//    - It creates the GitHub Release from the tag
-//    - The tagged source already contains the correct built JS
-//    - No build happens in CI (source and release stay consistent)
-//
-// ⚠️ Do NOT rebuild or modify files after tagging.
-//    Tags must always point to the exact code that is released.
+// The built card (frontend/playtopro-card.js and .js.map) is not committed.
+// For local testing run "npm run build" (production) or "npm run build:dev" /
+// "npm run build:watch" (unminified, inline source map).
 
 import { LitElement, html, css } from "lit";
+import { live } from "lit/directives/live.js";
 import type { HassEntity } from "home-assistant-js-websocket";
 import type { HomeAssistant, LovelaceCardConfig } from "custom-card-helpers";
 //import type PlayToProCardEditor from "../editor/playtopro-card-editor"
@@ -204,6 +194,13 @@ export class PlaytoproCard extends LitElement {
   private _selectedGroup: number;
   private _deviceId?: string;
   private _deviceEntities: Array<{ entity_id: string; [k: string]: unknown }>;
+  // Device whose entities are in _deviceEntities (set even when it has none).
+  private _loadedDeviceId?: string;
+  // Registry fetch in flight, so hass updates don't start another one.
+  private _loading?: Promise<void>;
+  // hass.entities object the list was loaded against. The frontend replaces
+  // it whenever the entity registry changes, so a new object means reload.
+  private _loadedRegistry?: unknown;
 
   constructor() {
     super();
@@ -232,37 +229,64 @@ export class PlaytoproCard extends LitElement {
   public set hass(next: HomeAssistant) {
     if (this._hass !== next) {
       this._hass = next;
-
-      if (this._deviceId && this._deviceEntities.length === 0) {
-        this.loadEntities();
-      }
-
+      this._ensureEntities();
       this.requestUpdate();
     }
   }
 
-  // Lovelace calls this exactly once with the card configuration (React: "receive initial props")
+  // Lovelace calls this with the card configuration, and again each time the
+  // editor changes it (React: "receive new props").
   public setConfig(config: PlayToProCardConfig): void {
-    console.log("setConfig called");
-    //if (config.device_id && config.device_id !== "")
-    //{
-      this._config = config;
+    this._config = config;
+    if (config.device_id !== this._deviceId) {
+      // Drop the previous device's entities so they are never shown for the
+      // newly selected device.
       this._deviceId = config.device_id;
-    //}
+      this._deviceEntities = [];
+      this._loadedDeviceId = undefined;
+    }
+    this._ensureEntities();
+    this.requestUpdate();
   }
 
-  // Async initializer for device + entities
-  private async loadEntities() {
-    if (!this._hass || !this._deviceId) return;
+  // Load the device's entities once, and again only when the selected device
+  // or the entity registry changes. hass is updated on every state change,
+  // so this must stay cheap when nothing needs loading.
+  private _ensureEntities(): void {
+    if (!this._hass || !this._deviceId || this._loading) return;
+    const registry = (this._hass as any).entities;
+    if (
+      this._loadedDeviceId === this._deviceId &&
+      (registry === undefined || registry === this._loadedRegistry)
+    ) {
+      return;
+    }
+    this._loading = this._loadEntities(this._deviceId, registry).finally(() => {
+      this._loading = undefined;
+      // The device may have changed while we were loading.
+      this._ensureEntities();
+    });
+  }
 
+  private async _loadEntities(deviceId: string, registry: unknown) {
     try {
-      const entities = await this._hass.callWS<any[]>({
+      // The full registry list includes original_name, which stays stable
+      // even if the user renames entities.
+      const entities = await this._hass!.callWS<any[]>({
         type: "config/entity_registry/list",
       });
+      if (deviceId !== this._deviceId) return; // stale result
       this._deviceEntities = entities.filter(
-        (e) => e.device_id === this._deviceId
+        (e) => e.device_id === deviceId && e.platform === "playtopro"
       );
-    } catch {
+      this._loadedDeviceId = deviceId;
+      this._loadedRegistry = registry;
+    } catch (err) {
+      console.error("playtopro-card: unable to load entities", err);
+      // Mark as loaded so we don't retry on every state change; a registry
+      // change or a new device selection triggers another attempt.
+      this._loadedDeviceId = deviceId;
+      this._loadedRegistry = registry;
     } finally {
       this.requestUpdate();
     }
@@ -335,15 +359,23 @@ export class PlaytoproCard extends LitElement {
     const entityId = input.dataset.entityId;
     if (!entityId || !this._hass) return;
 
-    await this._hass.callService(
-      "switch",
-      input.checked ? "turn_on" : "turn_off",
-      {
-        entity_id: entityId,
-      }
-    );
-    // HA state update will come via hass setter; requestUpdate() is harmless here
-    this.requestUpdate();
+    try {
+      await this._hass.callService(
+        "switch",
+        input.checked ? "turn_on" : "turn_off",
+        {
+          entity_id: entityId,
+        }
+      );
+    } catch (err) {
+      // Home Assistant already shows the error to the user; log it here and
+      // let the re-render below put the switch back to the real state.
+      console.error(`playtopro-card: unable to toggle ${entityId}`, err);
+    } finally {
+      // Switches are bound with live(), so this resets them to the entity's
+      // state if the call failed or the device didn't change.
+      this.requestUpdate();
+    }
   }
 
   // --- render (React: render()) ---
@@ -363,8 +395,13 @@ export class PlaytoproCard extends LitElement {
     else if (this._config.device_id === "") {
       return html`<ha-card><div>No device selected...</div></ha-card>`;
     }
-    else if (this._deviceEntities.length === 0) {
+    else if (this._loadedDeviceId !== this._config.device_id) {
       return html`<ha-card><div>Loading entities...</div></ha-card>`;
+    }
+    else if (this._deviceEntities.length === 0) {
+      return html`<ha-card
+        ><div>No playtopro entities found for this device.</div></ha-card
+      >`;
     }
 
     let groupCfg: GroupConfig = entityConfig.groups[this._selectedGroup];
@@ -396,7 +433,7 @@ export class PlaytoproCard extends LitElement {
               ${groupEntityState
                 ? html`
                     <ha-switch
-                      .checked=${groupEntityState?.state === "on"}
+                      .checked=${live(groupEntityState?.state === "on")}
                       data-entity-id=${groupEntity?.entity_id ?? ""}
                       @change=${this._toggleEntity}
                     ></ha-switch>`
@@ -450,7 +487,7 @@ export class PlaytoproCard extends LitElement {
                 </span>
                 <div style="display:flex;align-items:center;">
                   <ha-switch
-                    .checked=${groupZoneEnitityState.state === "on"}
+                    .checked=${live(groupZoneEnitityState.state === "on")}
                     .disabled=${groupEntityState?.state === "off"}
                     data-entity-id=${groupZoneEntity.entity_id}
                     @change=${this._toggleEntity}
@@ -481,11 +518,43 @@ export class PlaytoproCard extends LitElement {
   }
 
 
-  public static getStubConfig(): { device_id: string } {
+  // Called by the card picker. Preselect the first playtopro device so the
+  // card shows something useful straight away.
+  public static getStubConfig(hass?: HomeAssistant): { device_id: string } {
     // IMPORTANT: no "type" here
-    return { device_id: "" };
+    return { device_id: firstPlaytoproDevice(hass) ?? "" };
   }
 
+}
+
+// ---------------- Card picker integration ----------------
+
+type DisplayEntity = { platform?: string; device_id?: string };
+
+function playtoproEntities(hass?: HomeAssistant): DisplayEntity[] {
+  const entities = (hass as any)?.entities as
+    | Record<string, DisplayEntity>
+    | undefined;
+  return entities
+    ? Object.values(entities).filter((e) => e.platform === "playtopro")
+    : [];
+}
+
+function firstPlaytoproDevice(hass?: HomeAssistant): string | undefined {
+  return playtoproEntities(hass).find((e) => e.device_id)?.device_id;
+}
+
+// When the user picks an entity in the "Add card" dialog, Home Assistant asks
+// each custom card for suggestions. Offer this card, set up for that entity's
+// device, whenever a playtopro entity is picked.
+function getEntitySuggestion(hass: HomeAssistant, entityId: string) {
+  const entity = ((hass as any)?.entities as Record<string, DisplayEntity>)?.[
+    entityId
+  ];
+  if (entity?.platform !== "playtopro" || !entity.device_id) return null;
+  return {
+    config: { type: "custom:playtopro-card", device_id: entity.device_id },
+  };
 }
 
 // Register the element
@@ -497,7 +566,13 @@ declare global {
     "playtopro-card": PlaytoproCard;
   }
   interface Window {
-    customCards?: Array<{ type: string; name: string; description: string }>;
+    customCards?: Array<{
+      type: string;
+      name: string;
+      description: string;
+      documentationURL?: string;
+      getEntitySuggestion?: typeof getEntitySuggestion;
+    }>;
   }
 }
 window.customCards = window.customCards || [];
@@ -505,4 +580,6 @@ window.customCards.push({
   type: "playtopro-card",
   name: "playtopro card",
   description: "Organize and control lichen play devices.",
+  documentationURL: "https://github.com/playtopro/playtopro-integration",
+  getEntitySuggestion,
 });

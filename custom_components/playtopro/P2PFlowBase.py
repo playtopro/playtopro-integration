@@ -1,5 +1,8 @@
+"""Shared helpers for the playtopro config and options flows."""
+
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.const import CONF_HOST, CONF_PORT
@@ -7,7 +10,9 @@ from homeassistant.util.network import is_ip_address
 
 from homeassistant.config_entries import ConfigEntry
 from .const import CONF_FIRMWARE, CONF_PRIVATE_KEY, CONF_SERIAL_NUMBER
-from .P2PDevice import P2PDevice, P2PError, P2PFirmwareResponse
+from .P2PDevice import P2PDevice, P2PError, P2PFirmwareResponse, P2PRequestError
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class P2PFlowBase:
@@ -51,7 +56,7 @@ class P2PFlowBase:
         # The only request that is valid when the serial is passed as the private key
         # is get_firmware. If the device is also in setup mode, the private key will
         # be appended to the end of the packet and will be saved into the configuration.
-        hub = P2PDevice(hass=self.hass, ipv4=host, port=port, private_key=serial_number)
+        hub = P2PDevice(ipv4=host, port=port, private_key=serial_number)
 
         try:
             firmware_response: P2PFirmwareResponse = await hub.async_get_firmware()
@@ -72,7 +77,6 @@ class P2PFlowBase:
                 try:
                     # Validate private key / connectivity
                     hub = P2PDevice(
-                        hass=self.hass,
                         ipv4=host,
                         port=port,
                         private_key=firmware_response.private_key,
@@ -86,12 +90,18 @@ class P2PFlowBase:
                         CONF_PRIVATE_KEY: firmware_response.private_key,
                         CONF_FIRMWARE: firmware_response.firmware,
                     }
+                except P2PRequestError as err:
+                    _LOGGER.debug("Status check failed for %s: %s", host, err.error)
+                    errors["base"] = "cannot_connect"
                 except P2PError as err:
-                    errors["base"] = err.error
+                    _LOGGER.warning("Status check failed for %s: %s", host, err.error)
+                    errors["base"] = "unknown"
 
-        except ConnectionError:
+        except P2PRequestError as err:
+            _LOGGER.debug("Firmware request failed for %s: %s", host, err.error)
             errors["base"] = "cannot_connect"
         except P2PError as err:
-            errors["base"] = err.error
+            _LOGGER.warning("Firmware request failed for %s: %s", host, err.error)
+            errors["base"] = "unknown"
 
         return None

@@ -1,7 +1,7 @@
-
 {
   "title": "Playtopro",
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "Add Playtopro device",
@@ -9,11 +9,14 @@
           "host": "IP Address",
           "port": "Port",
           "serial_number": "Serial number"
-        }
+        },
+        "description": "Put the device in setup mode (hold the mode button for 2 seconds) before submitting."
       },
       "confirm": {
         "title": "Add playtopro device",
+        "description": "Put the device in setup mode (hold the mode button for 2 seconds) before submitting.",
         "data": {
+          "host": "IP Address",
           "port": "Port",
           "serial_number": "Serial number"
         }
@@ -28,10 +31,12 @@
       "firmware_not_supported": "Device firmware not suppport, connect device to cloud to update",
       "device_must_be_in_setup_mode_to_get_private_key": "Device must be in setup mode, press and hold mode button for 2 seconds",
       "failed_to_get_private_key": "Failed to get private key, connect device to cloud for firmware update",
-      "cannot_connect": "Unable to connect to device, check wifi connection"
-
+      "cannot_connect": "Unable to connect to device, check wifi connection",
+      "unknown": "Unexpected response from device, check the Home Assistant logs"
     },
     "abort": {
+      "already_configured": "Device is already configured",
+      "already_in_progress": "Setup for this device is already in progress",
       "device_already_added_details_updated": "Device already added, details updated",
       "invalid_serial": "Invalid serial number."
     }
@@ -41,8 +46,8 @@
       "init": {
         "title": "Playtopro device configuration",
         "data": {
-          "port": "Port",
-          "serial_number": "Serial number"
+          "host": "IP Address",
+          "port": "Port"
         }
       }
     },

@@ -1,10 +1,16 @@
 """P2P Connection Hub."""
 
-from array import array
-import socket
+import asyncio
+import contextlib
 
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+
+# Seconds allowed for connect + send + receive of one request.
+REQUEST_TIMEOUT = 5
+# '$' + serial (4 bytes) + packet + packet counter + length.
+RESPONSE_HEADER_SIZE = 8
+# Highest byte index read by P2PStatusResponse.
+STATUS_MIN_SIZE = 35
 
 
 class P2PZone:
@@ -139,7 +145,7 @@ class P2PResponse:
         """Initialize the Response for use."""
         self.data = input
         self.header = self.data[0]
-        self.serial_number = int.from_bytes(self.data[1:4], "little")
+        self.serial_number = int.from_bytes(self.data[1:5], "little")
         self.packet = int.from_bytes([self.data[5]], "little")
         self.packet_counter = int.from_bytes([self.data[6]], "little")
         self.length = int.from_bytes([self.data[7]], "little")
@@ -158,9 +164,9 @@ class P2PFirmwareResponse(P2PResponse):
         super().__init__(response.data)
         if self.packet == 0:
             if self.length == 7:
-                self.firmware = int.from_bytes(self.data[8:9], "little")
+                self.firmware = int.from_bytes(self.data[8:10], "little")
                 self.mode = int.from_bytes([self.data[10]], "little")
-                self.private_key = int.from_bytes(self.data[11:14], "little")
+                self.private_key = int.from_bytes(self.data[11:15], "little")
             else:
                 raise P2PError(
                     f"Unable to get firmware response, unexpected response size: {self.length}"
@@ -211,6 +217,10 @@ class P2PStatusResponse(P2PResponse):
         super().__init__(response.data)
 
         if self.packet == 1:
+            if len(self.data) < STATUS_MIN_SIZE:
+                raise P2PError(
+                    f"Unable to get status, response too short: {len(self.data)} bytes"
+                )
             self.system_run = bool.from_bytes([self.data[8]], "little")
             self.system_auto = bool.from_bytes([self.data[9]], "little")
             self.actual_output = int.from_bytes([self.data[10]], "little")
@@ -220,23 +230,23 @@ class P2PStatusResponse(P2PResponse):
             self.eco_mode_zones = int.from_bytes([self.data[14]], "little")
             self.eco_mode_factor = int.from_bytes([self.data[15]], "little")
             self.eco_mode_zones_active = int.from_bytes([self.data[16]], "little")
-            self.year = int.from_bytes(self.data[17:18], "little")
+            self.year = int.from_bytes(self.data[17:19], "little")
             self.month = int.from_bytes([self.data[19]], "little")
             self.day = int.from_bytes([self.data[20]], "little")
-            self.day = int.from_bytes([self.data[21]], "little")
+            self.day_of_week = int.from_bytes([self.data[21]], "little")
             self.hour = int.from_bytes([self.data[22]], "little")
             self.minute = int.from_bytes([self.data[23]], "little")
             self.second = int.from_bytes([self.data[24]], "little")
             self.sleep_mode = int.from_bytes([self.data[25]], "little")
-            self.sleep_until_year = int.from_bytes(self.data[26:27], "little")
+            self.sleep_until_year = int.from_bytes(self.data[26:28], "little")
             self.sleep_until_month = int.from_bytes([self.data[28]], "little")
             self.sleep_until_day = int.from_bytes([self.data[29]], "little")
-            self.sleep_until_day = int.from_bytes([self.data[30]], "little")
+            self.sleep_until_day_of_week = int.from_bytes([self.data[30]], "little")
             self.sleep_until_hour = int.from_bytes([self.data[31]], "little")
             self.sleep_until_minute = int.from_bytes([self.data[32]], "little")
             self.sleep_until_second = int.from_bytes([self.data[33]], "little")
             self.sleep_mode_zones = int.from_bytes([self.data[34]], "little")
-            self.zones: array = []
+            self.zones = []
 
             for x in range(8):
                 zone = P2PZone(x)
@@ -260,20 +270,18 @@ class P2PDevice:
     ipv4: str
     port: int
     private_key: int
-    hass: HomeAssistant
 
     def __init__(
         self,
-        hass: HomeAssistant,
         ipv4: str,
         port: int,
         private_key: int,
     ) -> None:
         """Initialize the API and store the auth so we can make requests."""
-        self.hass = hass
         self.ipv4 = ipv4
         self.port = port
         self.private_key = private_key
+        self._lock = asyncio.Lock()
 
     async def async_get_firmware(self) -> P2PFirmwareResponse:
         """Get the current status of the lichen play."""
@@ -290,7 +298,7 @@ class P2PDevice:
         try:
             response: P2PResponse = await self.async_get_response(request)
         except P2PRequestError as e:
-            raise P2PError(f"Unable to get status, {e.error}") from e
+            raise P2PRequestError(f"Unable to get status, {e.error}") from e
         return P2PStatusResponse(response)
 
     async def async_set_zone_manual_mode(
@@ -358,43 +366,53 @@ class P2PDevice:
         return P2PConfirmationResponse(response, request.packet)
 
     async def async_get_response(self, request: P2PRequest) -> P2PResponse:
-        """Send a request to the device asynchronously."""
-        return await self.hass.async_add_executor_job(self.sync_get_response, request)
+        """Send a request to the device and return its response.
 
-    def sync_get_response(self, request: P2PRequest) -> P2PResponse:
-        """Send a request to the device."""
+        Uses non-blocking asyncio streams so the Home Assistant event loop is
+        never blocked, applies an overall timeout, and serialises requests so
+        a poll and a command never talk to the device at the same time.
+        """
+        async with self._lock:
+            try:
+                async with asyncio.timeout(REQUEST_TIMEOUT):
+                    data = await self._async_exchange(request)
+            except TimeoutError as err:
+                raise P2PRequestError("Timed out waiting for device") from err
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        response = P2PResponse(data)
+        if response.header != ord("$"):
+            raise P2PRequestError("Unexpected header")
+        if response.packet != request.packet:
+            raise P2PRequestError("Packet mismatch")
+        return response
+
+    async def _async_exchange(self, request: P2PRequest) -> bytearray:
+        """Open a connection, send the request and read one full response."""
+        try:
+            reader, writer = await asyncio.open_connection(self.ipv4, self.port)
+        except OSError as err:
+            raise P2PRequestError("Connection failed") from err
 
         try:
-            s.connect((self.ipv4, self.port))
-        except Exception as err:
-            raise P2PRequestError("Failed to get response, connection failed") from err
+            writer.write(request.toBytes())
+            await writer.drain()
 
-        # print(request.toBytes())
+            # Header is 8 bytes: '$', serial (4), packet, counter, length.
+            # Then read exactly `length` payload bytes.
+            header = await reader.readexactly(RESPONSE_HEADER_SIZE)
+            payload = await reader.readexactly(header[7])
+        except asyncio.IncompleteReadError as err:
+            # The device closes the connection without replying when the
+            # private key is wrong.
+            raise P2PRequestError("No response, check private key") from err
+        except OSError as err:
+            raise P2PRequestError("Failed to send request") from err
+        finally:
+            writer.close()
+            with contextlib.suppress(OSError):
+                await writer.wait_closed()
 
-        output = request.toBytes()
-
-        sent: int = s.send(output)
-
-        if sent == len(output):
-            buffer: bytearray = bytearray(100)
-
-            result: int = s.recv_into(buffer)
-
-            s.close()
-
-            if result > 0:
-                response = P2PResponse(buffer)
-                if response.header == ord("$"):
-                    if response.packet == request.packet:
-                        return response
-                    raise P2PRequestError("Packet mismatch")
-                raise P2PRequestError("Unexpected header")
-            raise P2PRequestError(
-                "Failed to get response, no data received, check private key"
-            )
-        raise P2PRequestError("Failed to get response, unable to send request")
+        return bytearray(header + payload)
 
 
 class ConnectionFailed(HomeAssistantError):
@@ -406,7 +424,7 @@ class P2PError(HomeAssistantError):
 
     def __init__(self, error: str) -> None:
         """Initialize error."""
-        super().__init__()
+        super().__init__(error)
         self.error = error
 
 

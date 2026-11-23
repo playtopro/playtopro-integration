@@ -4,7 +4,8 @@
   "private": false,
   "type": "module",
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup -c --environment NODE_ENV:production",
+    "build:dev": "rollup -c",
     "build:watch": "rollup -c -w"
   },
   "devDependencies": {

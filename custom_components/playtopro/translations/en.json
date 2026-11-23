@@ -1,6 +1,8 @@
 {
     "config": {
         "abort": {
+            "already_configured": "Device is already configured",
+            "already_in_progress": "Setup for this device is already in progress",
             "device_already_added_details_updated": "Device already added, details updated",
             "invalid_serial": "Invalid serial number."
         },
@@ -13,14 +15,18 @@
             "invalid_ip_address": "Invalid IP address.",
             "invalid_port_must_be_numeric": "Invalid port number, must be numeric",
             "invalid_serial_number_must_be_numeric": "Invalid serial number, must be numeric",
-            "serial_number_mismatch": "Serial number mismatch, check serial printed on your device"
+            "serial_number_mismatch": "Serial number mismatch, check serial printed on your device",
+            "unknown": "Unexpected response from device, check the Home Assistant logs"
         },
+        "flow_title": "{name}",
         "step": {
             "confirm": {
                 "data": {
+                    "host": "IP Address",
                     "port": "Port",
                     "serial_number": "Serial number"
                 },
+                "description": "Put the device in setup mode (hold the mode button for 2 seconds) before submitting.",
                 "title": "Add playtopro device"
             },
             "user": {
@@ -29,6 +35,7 @@
                     "port": "Port",
                     "serial_number": "Serial number"
                 },
+                "description": "Put the device in setup mode (hold the mode button for 2 seconds) before submitting.",
                 "title": "Add Playtopro device"
             }
         }
@@ -40,8 +47,8 @@
         "step": {
             "init": {
                 "data": {
-                    "port": "Port",
-                    "serial_number": "Serial number"
+                    "host": "IP Address",
+                    "port": "Port"
                 },
                 "title": "Playtopro device configuration"
             }

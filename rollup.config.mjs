@@ -16,7 +16,9 @@ export default {
   },
   plugins: [
     resolve({ extensions: [".mjs", ".js", ".ts"] }),
-    typescript({ tsconfig: "tsconfig.json", sourceMap: !isProd, inlineSources: !isProd }),
+    // Source maps are always generated (inline for dev, a .map file for
+    // production), so TypeScript must always emit them.
+    typescript({ tsconfig: "tsconfig.json", sourceMap: true, inlineSources: !isProd }),
     isProd && terser(),
   ],
 };

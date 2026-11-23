@@ -34,6 +34,11 @@ OPTIONS_SCHEMA = vol.Schema(
 )
 
 
+def _entry_title(serial_number: int | str) -> str:
+    """Return the name used for a device's entry and its discovery card."""
+    return f"Lichen {serial_number}"
+
+
 # ---------------------------------------------------------------------------
 # CONFIG FLOW
 # ---------------------------------------------------------------------------
@@ -74,55 +79,27 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
         # 2) Bind this discovery to a stable unique_id
         await self.async_set_unique_id(serial_number)
 
-        # 3) Check if this device already has a config entry
-        existing_entries = self._async_current_entries()
-        if existing_entries:
-            entry = existing_entries[0]
+        # 3) If this serial number is already configured, apply any changed
+        #    host/port/firmware to that entry and abort. Only the entry with
+        #    this unique_id is touched, and HA only updates and reloads it when
+        #    the data actually changes.
+        self._abort_if_unique_id_configured(
+            updates={
+                CONF_HOST: host,
+                CONF_PORT: port,
+                CONF_FIRMWARE: firmware,
+            }
+        )
 
-            # Determine if anything actually changed
-            changed = False
-
-            if entry.data.get(CONF_HOST) != host:
-                changed = True
-            if entry.data.get(CONF_PORT) != port:
-                changed = True
-            if entry.data.get(CONF_FIRMWARE) != firmware:
-                changed = True
-
-            if changed:
-                _LOGGER.debug(
-                    "Zeroconf update detected for %s: host=%s port=%s firmware=%s",
-                    serial_number,
-                    host,
-                    port,
-                    firmware,
-                )
-
-                updates = {
-                    CONF_HOST: host,
-                    CONF_PORT: port,
-                    CONF_FIRMWARE: firmware,
-                }
-
-                # This updates the entry and aborts the flow
-                self._abort_if_unique_id_configured(updates=updates)
-
-            # No changes → abort quietly without reload
-            _LOGGER.debug(
-                "Zeroconf discovery for %s but no changes detected; aborting",
-                serial_number,
-            )
-            return self.async_abort(reason="already_configured")
-
-        # 4) New device → store discovery info and ask user to confirm
+        # 4) New device → ask user to confirm. Name the discovery card after the
+        #    device so several discovered devices can be told apart.
+        self.context["title_placeholders"] = {"name": _entry_title(serial_number)}
         self._discovered_info = {
             CONF_HOST: host,
             CONF_PORT: port,
             CONF_SERIAL_NUMBER: serial_number,
             CONF_FIRMWARE: firmware,
         }
-        # ✅ CHANGE THIS LINE: Add the serial number dynamically to the tile name string
-        self.context["title_placeholders"] = {"name": f"Lichen {serial_number}"}
 
         return await self.async_step_confirm()
 
@@ -154,7 +131,7 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
 
                 if data is not None:
                     return self.async_create_entry(
-                        title=f"Lichen play {serial_number}",
+                        title=_entry_title(serial_number),
                         data=data,
                     )
 
@@ -194,8 +171,12 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
             if await self._async_validate_input(
                 errors, host, port, serial_number, self._async_current_entries()
             ):
-                # Bind this config to a stable unique_id
-                await self.async_set_unique_id(str(serial_number))
+                # Bind this config to a stable unique_id. Don't abort if a
+                # discovery flow for the same device is pending; HA removes
+                # that flow once this entry is created.
+                await self.async_set_unique_id(
+                    str(serial_number), raise_on_progress=False
+                )
 
                 data: dict[str, Any] | None = await self._async_validate_device(
                     errors, host, int(port), int(serial_number)
@@ -203,7 +184,7 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
 
                 if data is not None:
                     return self.async_create_entry(
-                        title=f"Lichen {serial_number}",
+                        title=_entry_title(serial_number),
                         data=data,
                     )
 
