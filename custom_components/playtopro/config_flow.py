@@ -194,8 +194,12 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
             if await self._async_validate_input(
                 errors, host, port, serial_number, self._async_current_entries()
             ):
-                # Bind this config to a stable unique_id
-                await self.async_set_unique_id(str(serial_number))
+                # Bind this config to a stable unique_id. Don't abort if a
+                # discovery flow for the same device is pending; HA removes
+                # that flow once this entry is created.
+                await self.async_set_unique_id(
+                    str(serial_number), raise_on_progress=False
+                )
 
                 data: dict[str, Any] | None = await self._async_validate_device(
                     errors, host, int(port), int(serial_number)

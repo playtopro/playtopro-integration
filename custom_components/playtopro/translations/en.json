@@ -1,6 +1,8 @@
 {
     "config": {
         "abort": {
+            "already_configured": "Device is already configured",
+            "already_in_progress": "Setup for this device is already in progress",
             "device_already_added_details_updated": "Device already added, details updated",
             "invalid_serial": "Invalid serial number."
         },
