@@ -79,45 +79,17 @@ class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
         # 2) Bind this discovery to a stable unique_id
         await self.async_set_unique_id(serial_number)
 
-        # 3) Check if this device already has a config entry
-        existing_entries = self._async_current_entries()
-        if existing_entries:
-            entry = existing_entries[0]
-
-            # Determine if anything actually changed
-            changed = False
-
-            if entry.data.get(CONF_HOST) != host:
-                changed = True
-            if entry.data.get(CONF_PORT) != port:
-                changed = True
-            if entry.data.get(CONF_FIRMWARE) != firmware:
-                changed = True
-
-            if changed:
-                _LOGGER.debug(
-                    "Zeroconf update detected for %s: host=%s port=%s firmware=%s",
-                    serial_number,
-                    host,
-                    port,
-                    firmware,
-                )
-
-                updates = {
-                    CONF_HOST: host,
-                    CONF_PORT: port,
-                    CONF_FIRMWARE: firmware,
-                }
-
-                # This updates the entry and aborts the flow
-                self._abort_if_unique_id_configured(updates=updates)
-
-            # No changes → abort quietly without reload
-            _LOGGER.debug(
-                "Zeroconf discovery for %s but no changes detected; aborting",
-                serial_number,
-            )
-            return self.async_abort(reason="already_configured")
+        # 3) If this serial number is already configured, apply any changed
+        #    host/port/firmware to that entry and abort. Only the entry with
+        #    this unique_id is touched, and HA only updates and reloads it when
+        #    the data actually changes.
+        self._abort_if_unique_id_configured(
+            updates={
+                CONF_HOST: host,
+                CONF_PORT: port,
+                CONF_FIRMWARE: firmware,
+            }
+        )
 
         # 4) New device → ask user to confirm. Name the discovery card after the
         #    device so several discovered devices can be told apart.
