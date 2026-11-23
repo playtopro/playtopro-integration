@@ -28,7 +28,8 @@
       "firmware_not_supported": "Device firmware not suppport, connect device to cloud to update",
       "device_must_be_in_setup_mode_to_get_private_key": "Device must be in setup mode, press and hold mode button for 2 seconds",
       "failed_to_get_private_key": "Failed to get private key, connect device to cloud for firmware update",
-      "cannot_connect": "Unable to connect to device, check wifi connection"
+      "cannot_connect": "Unable to connect to device, check wifi connection",
+      "unknown": "Unexpected response from device, check the Home Assistant logs"
 
     },
     "abort": {
