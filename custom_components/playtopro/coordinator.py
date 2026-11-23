@@ -1,32 +1,28 @@
 """DataUpdateCoordinator for P2PDevice."""
 
-from typing import Any
+from __future__ import annotations
+
+from collections.abc import Awaitable
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import CONF_PRIVATE_KEY, DOMAIN, LOGGER, SCAN_INTERVAL
-from .P2PDevice import P2PConfirmationResponse, P2PDevice, P2PError, P2PStatusResponse
+from .P2PDevice import P2PDevice, P2PError, P2PRejectedError, P2PStatusResponse
+
+type P2PConfigEntry = ConfigEntry[P2PDataUpdateCoordinator]
 
 
-class P2PDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching P2P data from single endpoint."""
+class P2PDataUpdateCoordinator(DataUpdateCoordinator[P2PStatusResponse]):
+    """Polls the device status and sends commands to it."""
 
-    device: P2PDevice
-    status_response: P2PStatusResponse | None
+    config_entry: P2PConfigEntry
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        *,
-        entry: ConfigEntry,
-    ) -> None:
-        """Initialize global P2P data updater."""
-
-        # self.unsub: CALLBACK_TYPE | None = None
-
+    def __init__(self, hass: HomeAssistant, entry: P2PConfigEntry) -> None:
+        """Initialize the coordinator."""
         super().__init__(
             hass,
             LOGGER,
@@ -34,154 +30,44 @@ class P2PDataUpdateCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=SCAN_INTERVAL,
         )
-
-        self.status_response = None
-
-    async def _async_setup(self):
-        """Setup the coordinator."""
         self.device = P2PDevice(
-            hass=self.hass,
-            ipv4=self.config_entry.data[CONF_HOST],
-            port=self.config_entry.data[CONF_PORT],
-            private_key=self.config_entry.data[
-                CONF_PRIVATE_KEY
-            ],  # , session=async_get_clientsession(hass)
+            host=entry.data[CONF_HOST],
+            port=int(entry.data[CONF_PORT]),
+            private_key=int(entry.data[CONF_PRIVATE_KEY]),
         )
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from P2PDevice ."""
+    async def _async_update_data(self) -> P2PStatusResponse:
+        """Fetch the status from the device."""
         try:
-            self.status_response: P2PStatusResponse = (
-                await self.device.async_get_status()
-            )
+            return await self.device.async_get_status()
+        except P2PRejectedError:
+            pass
+        except P2PError as err:
+            raise UpdateFailed(f"Unable to get status: {err}") from err
 
-            data: dict[str, Any] = {}
-            data["status"] = self.status_response
-        except P2PError as e:
-            raise UpdateFailed(f"Unable to update data: {e.error}") from e
-        else:
-            return data
-
-    async def async_set_zone_manual_mode(self, zone: int, state: bool) -> bool:
-        """Set zone manual mode."""
+        # Rejected: ask once more so a single dropped request doesn't start
+        # re-authentication, then treat a second rejection as a bad key.
         try:
-            response: P2PConfirmationResponse = (
-                await self.device.async_set_zone_manual_mode(zone, state)
-            )
+            return await self.device.async_get_status()
+        except P2PRejectedError as err:
+            raise ConfigEntryAuthFailed(
+                "The device rejected the saved private key"
+            ) from err
+        except P2PError as err:
+            raise UpdateFailed(f"Unable to get status: {err}") from err
 
-            # Check the result and update the stored status for the device
-            if response.result:
-                # if self.status_response is not None:
-                # self.status_response.zones[zone].manual_mode_active = state
-                # self.async_set_updated_data({"status": self.status_response})
-
-                # Always reconcile with device truth
-                # await self.async_request_refresh()
-
-                return True
-            return False
-
-        except P2PError as error:
-            raise UpdateFailed(f"Unable to set zone manual mode: {error}") from error
-        else:
-            return response.result
-
-    async def async_set_auto_mode(self, state: bool) -> bool:
-        """Set device auto mode."""
+    async def async_send_command(self, command: Awaitable[bool]) -> None:
+        """Send a command, raise if it fails, then refresh the status."""
         try:
-            response: P2PConfirmationResponse = await self.device.async_set_auto_mode(
-                state
+            accepted = await command
+        except P2PError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        if not accepted:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="command_refused"
             )
-
-            # Check the result and update the stored status for the device
-            if response.result:
-                # if self.status_response:
-                # self.status_response.system_auto = state
-                # self.async_set_updated_data({"status": self.status_response})
-                return True
-            return False
-
-        except P2PError as error:
-            raise UpdateFailed(f"Unable to set auto mode: {error}") from error
-        else:
-            return response.result
-
-    async def async_set_zone_auto_mode(self, zone: int, state: bool) -> bool:
-        """Set zone auto mode."""
-        try:
-            response: P2PConfirmationResponse = (
-                await self.device.async_set_zone_auto_mode(zone, state)
-            )
-
-            # Check the result and update the stored status for the device
-            if response.result:
-                # if self.status_response:
-                #    self.status_response.zones[zone].auto_mode = state
-                #    self.async_set_updated_data({"status": self.status_response})
-                return True
-            return False
-
-        except P2PError as error:
-            raise UpdateFailed(f"Unable to set zone auto mode: {error}") from error
-        else:
-            return response.result
-
-    async def async_set_eco_mode(self, state: bool) -> bool:
-        """Set device eco mode."""
-        try:
-            response: P2PConfirmationResponse = await self.device.async_set_eco_mode(
-                state
-            )
-
-            # Check the result and update the stored status for the device
-            if response.result:
-                # if self.status_response:
-                #    self.status_response.eco_mode = state
-                #    self.async_set_updated_data({"status": self.status_response})
-                return True
-            return False
-
-        except P2PError as error:
-            raise UpdateFailed(f"Unable to set eco mode: {error}") from error
-        else:
-            return response.result
-
-    async def async_set_zone_eco_mode(self, zone: int, state: bool) -> bool:
-        """Set zone eco mode."""
-        try:
-            response: P2PConfirmationResponse = (
-                await self.device.async_set_zone_eco_mode(zone, state)
-            )
-
-            # Check the result and update the stored status for the device
-            if response.result:
-                # if self.status_response:
-                #    self.status_response.zones[zone].eco_mode = state
-                #    self.async_set_updated_data({"status": self.status_response})
-                return True
-            return False
-
-        except P2PError as error:
-            raise UpdateFailed(f"Unable to set zone eco mode: {error}") from error
-        else:
-            return response.result
-
-    async def async_set_zone_sleep_mode(self, zone: int, state: bool) -> bool:
-        """Set zone sleep mode."""
-        try:
-            response: P2PConfirmationResponse = (
-                await self.device.async_set_zone_sleep_mode(zone, state)
-            )
-
-            # Check the result and update the stored status for the device
-            if response.result:
-                # if self.status_response:
-                #    self.status_response.zones[zone].sleep_mode = state
-                #    self.async_set_updated_data({"status": self.status_response})
-                return True
-            return False
-
-        except P2PError as error:
-            raise UpdateFailed(f"Unable to set zone sleep mode: {error}") from error
-        else:
-            return response.result
+        await self.async_request_refresh()

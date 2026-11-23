@@ -1,51 +1,78 @@
 {
-    "config": {
-        "abort": {
-            "device_already_added_details_updated": "Device already added, details updated",
-            "invalid_serial": "Invalid serial number."
-        },
-        "error": {
-            "cannot_connect": "Unable to connect to device, check wifi connection",
-            "device_must_be_in_setup_mode_to_get_private_key": "Device must be in setup mode, press and hold mode button for 2 seconds",
-            "device_with_serial_number_already_added": "Device with matching serial number already added",
-            "failed_to_get_private_key": "Failed to get private key, connect device to cloud for firmware update",
-            "firmware_not_supported": "Device firmware not suppport, connect device to cloud to update",
-            "invalid_ip_address": "Invalid IP address.",
-            "invalid_port_must_be_numeric": "Invalid port number, must be numeric",
-            "invalid_serial_number_must_be_numeric": "Invalid serial number, must be numeric",
-            "serial_number_mismatch": "Serial number mismatch, check serial printed on your device"
-        },
-        "step": {
-            "confirm": {
-                "data": {
-                    "port": "Port",
-                    "serial_number": "Serial number"
-                },
-                "title": "Add playtopro device"
-            },
-            "user": {
-                "data": {
-                    "host": "IP Address",
-                    "port": "Port",
-                    "serial_number": "Serial number"
-                },
-                "title": "Add Playtopro device"
-            }
+  "title": "Playtopro",
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Add Playtopro device",
+        "description": "Put the device in setup mode first: press and hold the Mode button for 2 seconds until the mode LED flashes.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "serial_number": "Serial number"
         }
-    },
-    "options": {
-        "abort": {
-            "invalid_ip_address": "Invalid IP address."
-        },
-        "step": {
-            "init": {
-                "data": {
-                    "port": "Port",
-                    "serial_number": "Serial number"
-                },
-                "title": "Playtopro device configuration"
-            }
+      },
+      "confirm": {
+        "title": "Add Playtopro device",
+        "description": "Put the device in setup mode first: press and hold the Mode button for 2 seconds until the mode LED flashes.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "serial_number": "Serial number"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect Playtopro device",
+        "description": "{name} rejected the saved key. Put the device in setup mode (press and hold the Mode button for 2 seconds until the mode LED flashes), then select Submit. Afterwards, hold Mode for 2 seconds again to return to normal operation."
+      }
     },
-    "title": "Playtopro"
+    "error": {
+      "invalid_ip_address": "Invalid IP address.",
+      "cannot_connect": "Unable to connect to the device. Check the IP address, port and the device's WiFi connection.",
+      "request_rejected": "The device rejected the request. Check the details and that the device is in setup mode.",
+      "invalid_response": "The device sent an unexpected response.",
+      "serial_number_mismatch": "Serial number mismatch, check the serial number printed on your device.",
+      "firmware_not_supported": "Device firmware not supported. Connect the device to the cloud to update it.",
+      "device_must_be_in_setup_mode_to_get_private_key": "The device must be in setup mode: press and hold the Mode button for 2 seconds until the mode LED flashes.",
+      "failed_to_get_private_key": "Failed to get the private key. Connect the device to the cloud to update its firmware.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "Device is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "not_ipv4_address": "Only IPv4 addresses are supported.",
+      "invalid_discovery_info": "The discovered device didn't report a valid serial number."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Playtopro device configuration",
+        "description": "Change the address Home Assistant uses to reach the device. Setup mode isn't needed.",
+        "data": {
+          "host": "IP address",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "invalid_ip_address": "Invalid IP address.",
+      "cannot_connect": "Unable to connect to the device. Check the IP address, port and the device's WiFi connection.",
+      "request_rejected": "The device rejected the request. Check the details and that the device is in setup mode.",
+      "invalid_response": "The device sent an unexpected response.",
+      "serial_number_mismatch": "Serial number mismatch, check the serial number printed on your device.",
+      "firmware_not_supported": "Device firmware not supported. Connect the device to the cloud to update it.",
+      "device_must_be_in_setup_mode_to_get_private_key": "The device must be in setup mode: press and hold the Mode button for 2 seconds until the mode LED flashes.",
+      "failed_to_get_private_key": "Failed to get the private key. Connect the device to the cloud to update its firmware.",
+      "unknown": "Unexpected error."
+    }
+  },
+  "exceptions": {
+    "command_failed": {
+      "message": "Couldn't send the command to the device: {error}"
+    },
+    "command_refused": {
+      "message": "The device refused the command."
+    }
+  }
 }

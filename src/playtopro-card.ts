@@ -1,39 +1,14 @@
 // src/playtopro-card.ts
 //
-// Release process (IMPORTANT: order matters)
+// Release process
 //
-// To create a new release:
+// Push a tag (git tag vYYYY.M.D && git push origin vYYYY.M.D). The release
+// workflow builds this card into custom_components/playtopro/frontend/
+// (the built file is not committed), writes the tag's version into
+// manifest.json, const.py and package.json, and publishes playtopro.zip.
 //
-// 1. Update version in custom_components/playtopro/manifest.json
-//    - This is the version HACS and Home Assistant use.
-//
-// 2. Update version in package.json
-//    - Used for local/npm tooling only (not required by HACS, but recommended).
-//
-// 3. Update version in custom_components/playtopro/const.ts
-//    - Used for display (e.g. card picker, logging). Optional but recommended.
-//
-// 4. Run the build to update the bundled frontend JS:
-//      npm run build
-//    - This must update:
-//      custom_components/playtopro/frontend/playtopro-card.js
-//
-// 5. Commit and push ALL changes (including the built JS):
-//      git add .
-//      git commit -m "Release vYYYY.M.X"
-//      git push
-//
-// 6. Create and push a Git tag that points to THIS commit:
-//      git tag vYYYY.M.X
-//      git push origin vYYYY.M.X
-//
-// 7. The GitHub Actions release workflow will run automatically:
-//    - It creates the GitHub Release from the tag
-//    - The tagged source already contains the correct built JS
-//    - No build happens in CI (source and release stay consistent)
-//
-// ⚠️ Do NOT rebuild or modify files after tagging.
-//    Tags must always point to the exact code that is released.
+// Entities are matched by unique ID ("<serial>_<key>", see entity.py in the
+// integration), so renaming them in Home Assistant doesn't break the card.
 
 import { LitElement, html, css } from "lit";
 import type { HassEntity } from "home-assistant-js-websocket";
@@ -50,16 +25,24 @@ export interface PlayToProCardConfig extends LovelaceCardConfig {
 export interface GroupConfig {
   name: string;
   icon: string;
-  entity_original_name?: string;
+  /** Key of the device-wide switch for this group, if any. */
+  device_key?: string;
   information?: string;
-  entities: string[];
+  /** Key of the per-zone switches, without the "_NN" zone suffix. */
+  zone_key: string;
 }
 
 export interface PlayToProConfig {
-  eco_mode_factor: string;
-  eco_mode: string;
-  zones: string[];
+  zone_key: string;
+  zone_count: number;
   groups: GroupConfig[];
+}
+
+interface RegistryEntry {
+  entity_id: string;
+  device_id?: string | null;
+  unique_id?: string;
+  original_name?: string | null;
 }
 
 interface ShowNotificationEventDetail {
@@ -67,88 +50,39 @@ interface ShowNotificationEventDetail {
   duration?: number;
 }
 
-// ----------- Hard-coded entity mapping (adjust later if desired) ------------
+// ----------- Entity mapping (unique ID keys from the integration) ------------
 
 const entityConfig: PlayToProConfig = {
-  eco_mode_factor: "sensor.eco_mode_factor",
-  eco_mode: "switch.eco_mode",
-  zones: [
-    "Zone 01",
-    "Zone 02",
-    "Zone 03",
-    "Zone 04",
-    "Zone 05",
-    "Zone 06",
-    "Zone 07",
-    "Zone 08",
-  ],
+  zone_key: "zone",
+  zone_count: 8,
   groups: [
     {
       name: "Auto Mode",
       icon: "mdi:checkbox-marked-circle-auto-outline",
-      entity_original_name: "Auto Mode",
+      device_key: "auto_mode",
       information:
         "Turn on to use the schedule set in the lichen play app, turn off to schedule using Home Assistant",
-      entities: [
-        "Zone 01 Auto Mode",
-        "Zone 02 Auto Mode",
-        "Zone 03 Auto Mode",
-        "Zone 04 Auto Mode",
-        "Zone 05 Auto Mode",
-        "Zone 06 Auto Mode",
-        "Zone 07 Auto Mode",
-        "Zone 08 Auto Mode",
-      ],
+      zone_key: "zone_auto_mode",
     },
     {
       name: "Eco Mode",
       icon: "mdi:leaf",
-      entity_original_name: "Eco Mode",
+      device_key: "eco_mode",
       information:
         "Turn on eco mode to save water during cooler and wet weather",
-      entities: [
-        "Zone 01 Eco Mode",
-        "Zone 02 Eco Mode",
-        "Zone 03 Eco Mode",
-        "Zone 04 Eco Mode",
-        "Zone 05 Eco Mode",
-        "Zone 06 Eco Mode",
-        "Zone 07 Eco Mode",
-        "Zone 08 Eco Mode",
-      ],
+      zone_key: "zone_eco_mode",
     },
-    //{
-    //  name: "Sleep Mode",
-    //  icon: "mdi:sleep",
-    //  entities: [
-    //    "Zone 01 Sleep Mode",
-    //    "Zone 02 Sleep Mode",
-    //    "Zone 03 Sleep Mode",
-    //    "Zone 04 Sleep Mode",
-    //    "Zone 05 Sleep Mode",
-    //    "Zone 06 Sleep Mode",
-    //    "Zone 07 Sleep Mode",
-    //    "Zone 08 Sleep Mode",
-    //  ],
-    //},
     {
       name: "Manual Mode",
       icon: "mdi:run",
       information:
         "Manual run allows you to directly control each zone, use these in your HA automation",
-      entities: [
-        "Zone 01 Manual Mode",
-        "Zone 02 Manual Mode",
-        "Zone 03 Manual Mode",
-        "Zone 04 Manual Mode",
-        "Zone 05 Manual Mode",
-        "Zone 06 Manual Mode",
-        "Zone 07 Manual Mode",
-        "Zone 08 Manual Mode",
-      ],
+      zone_key: "zone_manual_mode",
     },
   ],
 };
+
+const zoneSuffix = (index: number) => `_${String(index).padStart(2, "0")}`;
 
 // ---------------- Card (React-style class) ----------------
 
@@ -203,13 +137,16 @@ export class PlaytoproCard extends LitElement {
   // --- Your internal "state" ---
   private _selectedGroup: number;
   private _deviceId?: string;
-  private _deviceEntities: Array<{ entity_id: string; [k: string]: unknown }>;
+  /** This device's entities, keyed by unique ID without the serial prefix. */
+  private _deviceEntities: Map<string, RegistryEntry>;
+  private _loadedDeviceId?: string;
+  private _loading = false;
 
   constructor() {
     super();
     // Initialize state (React constructor style)
     this._selectedGroup = entityConfig.groups.length - 1;
-    this._deviceEntities = [];
+    this._deviceEntities = new Map();
   }
 
   // React: componentDidMount
@@ -233,7 +170,7 @@ export class PlaytoproCard extends LitElement {
     if (this._hass !== next) {
       this._hass = next;
 
-      if (this._deviceId && this._deviceEntities.length === 0) {
+      if (this._deviceId && this._deviceId !== this._loadedDeviceId) {
         this.loadEntities();
       }
 
@@ -243,27 +180,35 @@ export class PlaytoproCard extends LitElement {
 
   // Lovelace calls this exactly once with the card configuration (React: "receive initial props")
   public setConfig(config: PlayToProCardConfig): void {
-    console.log("setConfig called");
-    //if (config.device_id && config.device_id !== "")
-    //{
-      this._config = config;
-      this._deviceId = config.device_id;
-    //}
+    this._config = config;
+    this._deviceId = config.device_id;
+    if (this._hass && this._deviceId && this._deviceId !== this._loadedDeviceId) {
+      this.loadEntities();
+    }
   }
 
-  // Async initializer for device + entities
+  // Load this device's entities from the entity registry (once per device)
   private async loadEntities() {
-    if (!this._hass || !this._deviceId) return;
+    if (!this._hass || !this._deviceId || this._loading) return;
+    const deviceId = this._deviceId;
+    this._loading = true;
 
     try {
-      const entities = await this._hass.callWS<any[]>({
+      const entities = await this._hass.callWS<RegistryEntry[]>({
         type: "config/entity_registry/list",
       });
-      this._deviceEntities = entities.filter(
-        (e) => e.device_id === this._deviceId
-      );
-    } catch {
+      const byKey = new Map<string, RegistryEntry>();
+      for (const e of entities) {
+        if (e.device_id !== deviceId || !e.unique_id) continue;
+        const separator = e.unique_id.indexOf("_");
+        if (separator > 0) byKey.set(e.unique_id.slice(separator + 1), e);
+      }
+      this._deviceEntities = byKey;
+      this._loadedDeviceId = deviceId;
+    } catch (err) {
+      console.warn("playtopro-card: unable to load entities", err);
     } finally {
+      this._loading = false;
       this.requestUpdate();
     }
   }
@@ -363,15 +308,15 @@ export class PlaytoproCard extends LitElement {
     else if (this._config.device_id === "") {
       return html`<ha-card><div>No device selected...</div></ha-card>`;
     }
-    else if (this._deviceEntities.length === 0) {
+    else if (this._deviceEntities.size === 0) {
       return html`<ha-card><div>Loading entities...</div></ha-card>`;
     }
 
-    let groupCfg: GroupConfig = entityConfig.groups[this._selectedGroup];
-    let groupEntity = groupCfg.entity_original_name ? this._deviceEntities.find(
-      (e) => e.original_name === groupCfg.entity_original_name
-    ) : undefined;
-    let groupEntityState: HassEntity | undefined = groupEntity
+    const groupCfg: GroupConfig = entityConfig.groups[this._selectedGroup];
+    const groupEntity = groupCfg.device_key
+      ? this._deviceEntities.get(groupCfg.device_key)
+      : undefined;
+    const groupEntityState: HassEntity | undefined = groupEntity
       ? this._hass.states[groupEntity.entity_id]
       : undefined;
 
@@ -417,25 +362,21 @@ export class PlaytoproCard extends LitElement {
             </div>
           </div>
 
-          ${entityConfig.zones.map((zone_original_name, index) => {
-            // Only show zone rows for entities that belong to this device
-            const zoneEntity = this._deviceEntities.find(
-              (e) => e.original_name === zone_original_name
+          ${Array.from({ length: entityConfig.zone_count }, (_, index) => {
+            const zoneEntity = this._deviceEntities.get(
+              entityConfig.zone_key + zoneSuffix(index)
             );
-            if (!zoneEntity) return html``;
+            const groupZoneEntity = this._deviceEntities.get(
+              groupCfg.zone_key + zoneSuffix(index)
+            );
+            if (!zoneEntity || !groupZoneEntity) return html``;
 
+            const zone_original_name =
+              zoneEntity.original_name ?? `Zone ${String(index + 1).padStart(2, "0")}`;
             const zoneState: HassEntity | undefined =
               this._hass!.states[zoneEntity.entity_id];
-            const groupZoneEntityOriginalName = groupCfg.entities[index];
-            const groupZoneEntity = this._deviceEntities.find(
-              (e) => e.original_name === groupZoneEntityOriginalName
-            );
-
-            if (!groupZoneEntity) return html``;
-
-            const groupZoneEnitityState: HassEntity | undefined = groupZoneEntity
-              ? this._hass!.states[groupZoneEntity.entity_id]
-              : undefined;
+            const groupZoneEnitityState: HassEntity | undefined =
+              this._hass!.states[groupZoneEntity.entity_id];
 
             if (!zoneState || !groupZoneEnitityState) return html``;
 
@@ -472,7 +413,7 @@ export class PlaytoproCard extends LitElement {
 
   // Lovelace sizing hint
   public getCardSize(): number {
-    return 2 + entityConfig.zones.length;
+    return 2 + entityConfig.zone_count;
   }
 
   // Lovelace editor factory

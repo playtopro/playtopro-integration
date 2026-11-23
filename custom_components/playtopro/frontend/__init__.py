@@ -1,121 +1,110 @@
-"""PlayToPro – JavaScript module registration."""
+"""PlayToPro: serve the card and register it as a dashboard resource."""
 
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
+from typing import Any
 
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.components.lovelace import MODE_STORAGE, LovelaceData
+from homeassistant.components.lovelace import MODE_STORAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
 
-from ..const import JSMODULES, URL_BASE  # module list + /playtopro base
+from ..const import JSMODULES, URL_BASE
 
 _LOGGER = logging.getLogger(__name__)
+
+LOVELACE_RETRY_SECONDS = 5
 
 
 class JSModuleRegistration:
     """Register JavaScript modules for PlayToPro."""
 
     def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize."""
         self.hass = hass
-        # Lovelace keeps its data object in hass.data["lovelace"] (a LovelaceData dataclass)
-        self.lovelace: LovelaceData = self.hass.data.get("lovelace")
+        # LovelaceData; None when the dashboard integration isn't loaded.
+        self.lovelace: Any = hass.data.get("lovelace")
+        # `resource_mode` replaced `mode` in HA 2026.2.
+        self.resource_mode = getattr(
+            self.lovelace, "resource_mode", getattr(self.lovelace, "mode", None)
+        )
 
-        # Future-proof: HA 2026.2 introduces breaking changes to Lovelace data access.
-        # If resource_mode exists, use it, otherwise fall back to mode.
-        # (Safer than checking MAJOR/MINOR only.)
-        if hasattr(self.lovelace, "resource_mode"):
-            self.resource_mode = self.lovelace.resource_mode
-        else:
-            self.resource_mode = getattr(self.lovelace, "mode", None)
+    @property
+    def _manages_resources(self) -> bool:
+        """Resources can only be edited in storage mode."""
+        return self.lovelace is not None and self.resource_mode == MODE_STORAGE
 
     async def async_register(self) -> None:
-        """Register static path and (in storage mode) add Lovelace resources."""
+        """Serve /playtopro/* and, in storage mode, add the dashboard resource."""
         await self._async_register_path()
-        if self.lovelace and self.resource_mode == MODE_STORAGE:
+        if self._manages_resources:
             await self._async_wait_for_lovelace_resources()
 
     async def _async_register_path(self) -> None:
-        """Register /playtopro/* → this package dir (async, non-deprecated API)."""
+        """Serve this folder at /playtopro."""
+        if self.hass.http is None:
+            return
         try:
             await self.hass.http.async_register_static_paths(
-                [StaticPathConfig(URL_BASE, Path(__file__).parent, cache_headers=True)]
+                [StaticPathConfig(URL_BASE, str(Path(__file__).parent), True)]
             )
-            _LOGGER.debug("Registered resource path from %s", Path(__file__).parent)
         except RuntimeError:
-            # Path likely already registered on reload
             _LOGGER.debug("Resource path already registered")
 
     async def _async_wait_for_lovelace_resources(self) -> None:
-        """Wait for Lovelace resources to finish loading, then register modules."""
+        """Wait for the dashboard resources to load, then register the card."""
 
-        async def _check_lovelace_resources_loaded(_now):
-            # ResourceStorageCollection exposes a 'loaded' flag after loading storage
+        async def _check_loaded(_now: Any) -> None:
             if getattr(self.lovelace.resources, "loaded", True):
                 await self._async_register_modules()
             else:
-                _LOGGER.debug(
-                    "Lovelace resources not yet loaded; retrying in 5 seconds"
-                )
-                async_call_later(self.hass, 5, _check_lovelace_resources_loaded)
+                _LOGGER.debug("Dashboard resources not loaded yet; retrying")
+                async_call_later(self.hass, LOVELACE_RETRY_SECONDS, _check_loaded)
 
-        await _check_lovelace_resources_loaded(0)
+        await _check_loaded(None)
+
+    async def _async_resource_items(self) -> list[dict[str, Any]]:
+        if not getattr(self.lovelace.resources, "loaded", True):
+            await self.lovelace.resources.async_load()
+        return list(self.lovelace.resources.async_items())
 
     async def _async_register_modules(self) -> None:
-        """Ensure our card(s) are present and versioned (storage mode)."""
-        _LOGGER.debug("Installing JavaScript modules")
-
-        # Recent cores keep a ResourceStorageCollection with items accessible from the loop.
-        # Some builds expose async_items(); if it’s sync, just call it.
-        items = self.lovelace.resources.async_items()
-        if callable(getattr(items, "__await__", None)):
-            items = await items  # type: ignore
-
+        """Add the card resource, or update its version."""
         resources = [
-            resource for resource in items if str(resource["url"]).startswith(URL_BASE)
+            r for r in await self._async_resource_items() if str(r["url"]).startswith(URL_BASE)
         ]
 
         for module in JSMODULES:
-            url = f"{URL_BASE}/{module.get('filename')}"
-            new_url = f"{url}?v={module.get('version')}"
-
-            # Already registered?
+            url = f"{URL_BASE}/{module['filename']}"
+            new_url = f"{url}?v={module['version']}"
             existing = next(
                 (r for r in resources if self._get_resource_path(r["url"]) == url),
                 None,
             )
 
-            if existing:
-                # If version changed, update
-                if self._get_resource_version(existing["url"]) != module.get("version"):
-                    _LOGGER.debug(
-                        "Updating %s to version %s",
-                        module.get("name"),
-                        module.get("version"),
-                    )
-                    await self.lovelace.resources.async_update_item(
-                        existing.get("id"),
-                        {"res_type": "module", "url": new_url},
-                    )
-                    await self.async_remove_gzip_files()
-                else:
-                    _LOGGER.debug(
-                        "%s already registered as version %s",
-                        module.get("name"),
-                        module.get("version"),
-                    )
-            else:
-                _LOGGER.debug(
-                    "Registering %s as version %s",
-                    module.get("name"),
-                    module.get("version"),
-                )
+            if existing is None:
+                _LOGGER.debug("Registering %s %s", module["name"], module["version"])
                 await self.lovelace.resources.async_create_item(
                     {"res_type": "module", "url": new_url}
                 )
+            elif self._get_resource_version(existing["url"]) != module["version"]:
+                _LOGGER.debug("Updating %s to %s", module["name"], module["version"])
+                await self.lovelace.resources.async_update_item(
+                    existing["id"], {"res_type": "module", "url": new_url}
+                )
+                await self.hass.async_add_executor_job(self._remove_gzip_files)
+
+    async def async_unregister(self) -> None:
+        """Remove the card resource (storage mode only)."""
+        if not self._manages_resources:
+            return
+        for module in JSMODULES:
+            url = f"{URL_BASE}/{module['filename']}"
+            for resource in await self._async_resource_items():
+                if self._get_resource_path(str(resource["url"])) == url:
+                    await self.lovelace.resources.async_delete_item(resource["id"])
 
     @staticmethod
     def _get_resource_path(url: str) -> str:
@@ -124,46 +113,18 @@ class JSModuleRegistration:
     @staticmethod
     def _get_resource_version(url: str) -> str:
         parts = url.split("?", 1)
-        if len(parts) == 2:
-            q = parts[1]
-            if q.startswith("v="):
-                return q.replace("v=", "")
-            # Support '... ?v=1.2.3' and also any accidental '...?param=v=...'
-            if "v=" in q:
-                return q.split("v=", 1)[1]
+        if len(parts) == 2 and "v=" in parts[1]:
+            return parts[1].split("v=", 1)[1]
         return "0"
 
-    async def async_unregister(self) -> None:
-        """Remove Lovelace resources on unload (storage mode only)."""
-        if self.resource_mode != MODE_STORAGE:
-            return
-
-        items = self.lovelace.resources.async_items()
-        if callable(getattr(items, "__await__", None)):
-            items = await items  # type: ignore
-
-        for module in JSMODULES:
-            url = f"{URL_BASE}/{module.get('filename')}"
-            for res in list(items):
-                if str(res["url"]).startswith(url):
-                    await self.lovelace.resources.async_delete_item(res.get("id"))
-
-    async def async_remove_gzip_files(self) -> None:
-        """Remove stale .gz files (done off the event loop)."""
-        await self.hass.async_add_executor_job(self._remove_gzip_files)
-
-    def _remove_gzip_files(self) -> None:
-        """Remove cached gzip files in this package dir if the .js is newer."""
-        # CHANGED: Use this folder, not a hard-coded "wiser" path.
-        path = Path(__file__).parent
-        try:
-            for file in path.glob("*.gz"):
-                js = file.with_suffix("")  # strip .gz
-                try:
-                    if js.exists() and file.stat().st_mtime < js.stat().st_mtime:
-                        _LOGGER.debug("Removing older gzip file - %s", file.name)
-                        file.unlink(missing_ok=True)
-                except OSError:
-                    pass
-        except OSError:
-            pass
+    @staticmethod
+    def _remove_gzip_files() -> None:
+        """Remove cached .gz files older than their .js file."""
+        for file in Path(__file__).parent.glob("*.gz"):
+            js = file.with_suffix("")
+            try:
+                if js.exists() and file.stat().st_mtime < js.stat().st_mtime:
+                    _LOGGER.debug("Removing older gzip file %s", file.name)
+                    file.unlink(missing_ok=True)
+            except OSError:
+                pass

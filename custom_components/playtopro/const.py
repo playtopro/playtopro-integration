@@ -7,6 +7,8 @@ DOMAIN = "playtopro"
 CONF_SERIAL_NUMBER = "serial_number"
 CONF_FIRMWARE = "firmware"
 CONF_PRIVATE_KEY = "private_key"
+DEFAULT_PORT = 1233
+MIN_FIRMWARE = 28
 LOGGER = logging.getLogger(__package__)
 SCAN_INTERVAL = timedelta(seconds=3)
 URL_BASE = "/playtopro"

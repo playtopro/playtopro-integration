@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from contextlib import suppress
 import logging
 from typing import Any
 
@@ -15,264 +17,200 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+from homeassistant.util.network import is_ip_address
 
-from .const import CONF_FIRMWARE, CONF_SERIAL_NUMBER, DOMAIN
-from .P2PFlowBase import P2PFlowBase
+from .const import (
+    CONF_FIRMWARE,
+    CONF_PRIVATE_KEY,
+    CONF_SERIAL_NUMBER,
+    DEFAULT_PORT,
+    DOMAIN,
+)
+from .P2PFlowBase import async_validate_connection, async_validate_new_device
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_PORT = 1233
+PORT_VALIDATOR = vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))
+SERIAL_VALIDATOR = vol.All(vol.Coerce(int), vol.Range(min=1, max=0xFFFFFFFF))
 
-OPTIONS_SCHEMA = vol.Schema(
+DEVICE_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_SERIAL_NUMBER): int,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): PORT_VALIDATOR,
+        vol.Required(CONF_SERIAL_NUMBER): SERIAL_VALIDATOR,
+    }
+)
+
+CONNECTION_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT): PORT_VALIDATOR,
     }
 )
 
 
-# ---------------------------------------------------------------------------
-# CONFIG FLOW
-# ---------------------------------------------------------------------------
+def _entry_title(serial_number: int) -> str:
+    return f"Lichen {serial_number}"
 
 
-class P2PConfigFlow(ConfigFlow, P2PFlowBase, domain=DOMAIN):
+class P2PConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Lichen PlayToPro."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     def __init__(self) -> None:
         """Initialize the config flow."""
-        super().__init__()
-        # Required so HA doesn't complain about dynamic attributes
-        self._discovered_info: dict[str, Any] | None = None
+        self._discovered: dict[str, Any] = {}
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+    def async_get_options_flow(config_entry: ConfigEntry) -> P2POptionsFlowHandler:
         """Get the options flow for this handler."""
-        return P2POptionsFlowHandler(config_entry)
+        return P2POptionsFlowHandler()
 
-    # -----------------------------------------------------------------------
-    # ZEROCONF DISCOVERY
-    # -----------------------------------------------------------------------
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
         """Handle zeroconf discovery of a Lichen PlayToPro device."""
         _LOGGER.debug("Zeroconf discovery received: %s", discovery_info)
 
-        # 1) Load discovered information
-        host: str = discovery_info.host
-        port: int = int(discovery_info.port)
-        serial_number: str = discovery_info.properties.get("serial")
-        firmware: int = int(discovery_info.properties.get("firmware"))
+        if discovery_info.ip_address.version != 4:
+            return self.async_abort(reason="not_ipv4_address")
 
-        # 2) Bind this discovery to a stable unique_id
-        await self.async_set_unique_id(serial_number)
+        try:
+            serial_number = int(discovery_info.properties["serial"])
+        except (KeyError, TypeError, ValueError):
+            return self.async_abort(reason="invalid_discovery_info")
 
-        # 3) Check if this device already has a config entry
-        existing_entries = self._async_current_entries()
-        if existing_entries:
-            entry = existing_entries[0]
+        host = discovery_info.host
+        port = discovery_info.port or DEFAULT_PORT
+        updates: dict[str, Any] = {CONF_HOST: host, CONF_PORT: port}
+        with suppress(KeyError, TypeError, ValueError):
+            updates[CONF_FIRMWARE] = int(discovery_info.properties["firmware"])
 
-            # Determine if anything actually changed
-            changed = False
+        # Known device: keep its address up to date (reloads only if changed).
+        await self.async_set_unique_id(str(serial_number))
+        self._abort_if_unique_id_configured(updates=updates)
 
-            if entry.data.get(CONF_HOST) != host:
-                changed = True
-            if entry.data.get(CONF_PORT) != port:
-                changed = True
-            if entry.data.get(CONF_FIRMWARE) != firmware:
-                changed = True
-
-            if changed:
-                _LOGGER.debug(
-                    "Zeroconf update detected for %s: host=%s port=%s firmware=%s",
-                    serial_number,
-                    host,
-                    port,
-                    firmware,
-                )
-
-                updates = {
-                    CONF_HOST: host,
-                    CONF_PORT: port,
-                    CONF_FIRMWARE: firmware,
-                }
-
-                # This updates the entry and aborts the flow
-                self._abort_if_unique_id_configured(updates=updates)
-
-            # No changes → abort quietly without reload
-            _LOGGER.debug(
-                "Zeroconf discovery for %s but no changes detected; aborting",
-                serial_number,
-            )
-            return self.async_abort(reason="already_configured")
-
-        # 4) New device → store discovery info and ask user to confirm
-        self._discovered_info = {
+        # New device: ask the user to confirm.
+        self._discovered = {
             CONF_HOST: host,
             CONF_PORT: port,
             CONF_SERIAL_NUMBER: serial_number,
-            CONF_FIRMWARE: firmware,
         }
-        # ✅ CHANGE THIS LINE: Add the serial number dynamically to the tile name string
-        self.context["title_placeholders"] = {"name": f"Lichen {serial_number}"}
-
+        self.context["title_placeholders"] = {"name": _entry_title(serial_number)}
         return await self.async_step_confirm()
 
-    # -----------------------------------------------------------------------
-    # CONFIRMATION STEP (shared by Zeroconf)
-    # -----------------------------------------------------------------------
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the confirmation step for a Lichen PlayToPro device."""
-        errors: dict[str, str] = {}
+        """Confirm a discovered device."""
+        return await self._async_step_add_device("confirm", user_input, self._discovered)
 
-        if user_input is not None:
-            host: str = user_input[CONF_HOST]
-            port: int = int(user_input[CONF_PORT])
-            serial_number: int = int(user_input[CONF_SERIAL_NUMBER])
-
-            if await self._async_validate_input(
-                errors, host, port, serial_number, self._async_current_entries()
-            ):
-                # Bind this config to a stable unique_id
-                await self.async_set_unique_id(str(serial_number))
-
-                self._abort_if_unique_id_configured()
-
-                data: dict[str, Any] | None = await self._async_validate_device(
-                    errors, host, port, serial_number
-                )
-
-                if data is not None:
-                    return self.async_create_entry(
-                        title=f"Lichen play {serial_number}",
-                        data=data,
-                    )
-
-        return self.async_show_form(
-            step_id="confirm",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_HOST, default=self._discovered_info[CONF_HOST]
-                    ): str,
-                    vol.Required(
-                        CONF_PORT, default=int(self._discovered_info[CONF_PORT])
-                    ): int,
-                    vol.Required(
-                        CONF_SERIAL_NUMBER,
-                        default=int(self._discovered_info[CONF_SERIAL_NUMBER]),
-                    ): int,
-                }
-            ),
-            errors=errors,
-        )
-
-    # -----------------------------------------------------------------------
-    # MANUAL SETUP
-    # -----------------------------------------------------------------------
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the user step for a Lichen PlayToPro device."""
+        """Add a device manually."""
+        return await self._async_step_add_device("user", user_input, {})
+
+    async def _async_step_add_device(
+        self,
+        step_id: str,
+        user_input: dict[str, Any] | None,
+        defaults: Mapping[str, Any],
+    ) -> ConfigFlowResult:
+        """Validate the device details and fetch its private key."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            host: str = user_input[CONF_HOST]
-            port: int = int(user_input[CONF_PORT])
-            serial_number: int = int(user_input[CONF_SERIAL_NUMBER])
+            host = user_input[CONF_HOST].strip()
+            port = user_input[CONF_PORT]
+            serial_number = user_input[CONF_SERIAL_NUMBER]
 
-            if await self._async_validate_input(
-                errors, host, port, serial_number, self._async_current_entries()
-            ):
-                # Bind this config to a stable unique_id
+            if not is_ip_address(host):
+                errors["base"] = "invalid_ip_address"
+            else:
                 await self.async_set_unique_id(str(serial_number))
+                self._abort_if_unique_id_configured()
 
-                data: dict[str, Any] | None = await self._async_validate_device(
-                    errors, host, int(port), int(serial_number)
-                )
-
+                data = await async_validate_new_device(errors, host, port, serial_number)
                 if data is not None:
                     return self.async_create_entry(
-                        title=f"Lichen {serial_number}",
-                        data=data,
+                        title=_entry_title(serial_number), data=data
                     )
+            defaults = user_input
 
-            return self.async_show_form(
-                step_id="user",
-                data_schema=vol.Schema(
-                    {
-                        vol.Required(CONF_HOST, default=host): str,
-                        vol.Required(CONF_PORT, default=port): int,
-                        vol.Required(CONF_SERIAL_NUMBER, default=serial_number): int,
-                    }
-                ),
-                errors=errors,
+        return self.async_show_form(
+            step_id=step_id,
+            data_schema=self.add_suggested_values_to_schema(DEVICE_SCHEMA, defaults),
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Start re-authentication after the device rejected the saved key."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Fetch a new private key from the device in setup mode."""
+        entry = self._get_reauth_entry()
+        serial_number = int(entry.data[CONF_SERIAL_NUMBER])
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            data = await async_validate_new_device(
+                errors, entry.data[CONF_HOST], int(entry.data[CONF_PORT]), serial_number
             )
+            if data is not None:
+                return self.async_update_reload_and_abort(entry, data_updates=data)
 
-        return self.async_show_form(step_id="user", data_schema=OPTIONS_SCHEMA)
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            errors=errors,
+            description_placeholders={"name": _entry_title(serial_number)},
+        )
 
 
-# ---------------------------------------------------------------------------
-# OPTIONS FLOW
-# ---------------------------------------------------------------------------
-
-
-class P2POptionsFlowHandler(OptionsFlow, P2PFlowBase):
-    """Handle PlayToPro options."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize the options flow."""
-        self.entry = config_entry
+class P2POptionsFlowHandler(OptionsFlow):
+    """Change the host and port of an added device."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the options step for a Lichen PlayToPro device."""
+        entry = self.config_entry
         errors: dict[str, str] = {}
+        defaults: Mapping[str, Any] = entry.data
 
         if user_input is not None:
-            host: str = user_input[CONF_HOST]
-            port: int = int(user_input[CONF_PORT])
-            serial_number: int = int(self.entry.data[CONF_SERIAL_NUMBER])
+            host = user_input[CONF_HOST].strip()
+            port = user_input[CONF_PORT]
 
-            data: dict[str, Any] | None = await self._async_validate_device(
-                errors, host, port, serial_number
-            )
-
-            if data is not None:
-                # Update
-                self.hass.config_entries.async_update_entry(
-                    entry=self.entry,
-                    data=data,
+            if not is_ip_address(host):
+                errors["base"] = "invalid_ip_address"
+            else:
+                updates = await async_validate_connection(
+                    errors,
+                    host,
+                    port,
+                    int(entry.data[CONF_SERIAL_NUMBER]),
+                    int(entry.data[CONF_PRIVATE_KEY]),
                 )
-
-                # Reload
-                await self.hass.config_entries.async_reload(self.entry.entry_id)
-
-                # Return
-                return self.async_create_entry(title="", data={})
+                if updates is not None:
+                    self.hass.config_entries.async_update_entry(
+                        entry, data={**entry.data, **updates}
+                    )
+                    self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                    return self.async_create_entry(data={})
+            defaults = user_input
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=self.entry.data[CONF_HOST]): str,
-                    vol.Required(CONF_PORT, default=self.entry.data[CONF_PORT]): int,
-                }
-            ),
+            data_schema=self.add_suggested_values_to_schema(CONNECTION_SCHEMA, defaults),
             errors=errors,
         )
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""

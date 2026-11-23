@@ -13,7 +13,9 @@ The integration also includes a custom UI card for best user experience.
 - ✅ **Automatic device discovery** using Zeroconf (mDNS)
 - ✅ **Guided setup** via the Home Assistant config flow
 - ✅ **Manual setup** option if discovery is unavailable
-- ✅ **Options flow** to update connection details (host/port)
+- ✅ **Options flow** to update connection details (host/port), no setup mode needed
+- ✅ **Re-authentication**: if the device stops accepting the saved key, Home Assistant asks you to reconnect it
+- ✅ **Dashboard card** registered automatically
 
 ---
 
@@ -34,6 +36,11 @@ The integration also includes a custom UI card for best user experience.
 1. In HACS, search for **Playtopro**
 2. Click **Install**
 3. Restart Home Assistant when prompted
+
+### Installing without HACS
+
+Download `playtopro.zip` from the [latest release](https://github.com/playtopro/playtopro-integration/releases/latest) and extract it into `config/custom_components/playtopro/`, then restart Home Assistant.
+Don't copy the folder straight from the repository: the release adds the version number Home Assistant needs, and builds the card.
 
 ---
 
@@ -120,7 +127,26 @@ You can also manually update connection details:
     - **Host**
     - **Port**
 
-All changes are validated before being applied.
+All changes are validated before being applied. The device doesn't need to be in setup mode.
+
+---
+
+## 🧩 Entities
+
+Each device gets:
+
+| Entity | Type | Description |
+|---|---|---|
+| Zone 01–08 | Binary sensor (running) | On while the zone is watering. Attributes show whether manual or eco mode is active. |
+| Zone 01–08 Manual Mode | Switch | Start or stop a manual run. Use these in your automations. |
+| Zone 01–08 Auto Mode | Switch | Whether the zone follows the schedule set in the Lichen Play app. |
+| Zone 01–08 Eco Mode | Switch | Eco mode for the zone. |
+| Zone 01–08 Sleep Mode | Switch | Sleep mode for the zone. |
+| Auto Mode | Switch | Run the device's own schedule. |
+| Eco Mode | Switch | Eco mode for the whole device. |
+| Eco Mode Factor | Sensor (%) | Share of the normal run time used while eco mode is active. |
+
+> **Upgrading from an earlier version:** the zone entities moved from `sensor.*` to `binary_sensor.*` (for example `sensor.playtopro_12345_zone_01` is now `binary_sensor.playtopro_12345_zone_01`). Update any automations or dashboards that use them.
 
 ---
 
@@ -130,6 +156,13 @@ All changes are validated before being applied.
 - Zeroconf discovery keeps the IP address up to date automatically
 - Each physical device maps to a **single Home Assistant device**
 - All entities are grouped under the correct device
+
+---
+
+## 🛠️ Troubleshooting
+
+- **"Reconnect Playtopro device" / re-authentication required**: the device stopped accepting the saved key (for example after a factory reset). Put the device in setup mode (hold **Mode** for 2 seconds until the mode LED flashes), then open the notification and click **Submit**. Hold **Mode** again for 2 seconds to return to normal operation.
+- **Device unavailable**: check the device is powered and on WiFi. If its IP address changed and discovery hasn't picked it up, update it under **Configure**.
 
 ---
 
@@ -161,6 +194,18 @@ For more information about Playtopro products, features, and official documentat
 - **Playtopro Official Website:** https://www.playtopro.com/
 
 You may find product overviews, specifications, firmware details, and general support resources there.
+
+---
+
+## 🧪 Development
+
+```bash
+pip install -r requirements_test.txt
+pytest
+```
+
+The tests run the integration against a simulated device that follows the firmware's protocol rules.
+Build the card with `npm ci && npm run build`.
 
 ---
 

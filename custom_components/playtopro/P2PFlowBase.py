@@ -1,97 +1,100 @@
+"""Device checks shared by the config, reauth and options flows."""
+
 from __future__ import annotations
 
 from typing import Any
 
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.util.network import is_ip_address
 
-from homeassistant.config_entries import ConfigEntry
-from .const import CONF_FIRMWARE, CONF_PRIVATE_KEY, CONF_SERIAL_NUMBER
+from .const import CONF_FIRMWARE, CONF_PRIVATE_KEY, CONF_SERIAL_NUMBER, MIN_FIRMWARE
 from .P2PDevice import P2PDevice, P2PError, P2PFirmwareResponse
 
 
-class P2PFlowBase:
-    """Common helpers shared by config and options flows."""
+async def _async_get_firmware(
+    errors: dict[str, str], host: str, port: int, serial_number: int
+) -> P2PFirmwareResponse | None:
+    """Ask the device who it is, and check it is the expected, supported device.
 
-    async def _async_validate_input(
-        self,
-        errors: dict[str, str],
-        host: str,
-        port: int,
-        serial_number: int,
-        entries: list[ConfigEntry],
-    ) -> bool:
-        if is_ip_address(host):
-            match: bool = False
-
-            for entry in entries:
-                registered_serial_number: int = int(entry.data.get(CONF_SERIAL_NUMBER))
-
-                if registered_serial_number == serial_number:
-                    match = True
-                    break
-            if not match:
-                return True
-            else:
-                errors["base"] = "device_with_serial_number_already_added"
-        else:
-            errors["base"] = "invalid_ip_address"
-        return False
-
-    # -----------------------------------------------------------------------
-    # DEVICE VALIDATION (shared by manual + Zeroconf)
-    # -----------------------------------------------------------------------
-    async def _async_validate_device(
-        self,
-        errors: dict[str, str],
-        host: str,
-        port: int,
-        serial_number: int,
-    ) -> dict[str, Any] | None:
-        # The only request that is valid when the serial is passed as the private key
-        # is get_firmware. If the device is also in setup mode, the private key will
-        # be appended to the end of the packet and will be saved into the configuration.
-        hub = P2PDevice(hass=self.hass, ipv4=host, port=port, private_key=serial_number)
-
-        try:
-            firmware_response: P2PFirmwareResponse = await hub.async_get_firmware()
-
-            if firmware_response.serial_number != serial_number:
-                errors["base"] = "serial_number_mismatch"
-
-            elif firmware_response.firmware < 28:
-                errors["base"] = "firmware_not_supported"
-
-            elif firmware_response.mode == 0:
-                errors["base"] = "device_must_be_in_setup_mode_to_get_private_key"
-
-            elif firmware_response.private_key == 0:
-                errors["base"] = "failed_to_get_private_key"
-
-            else:
-                try:
-                    # Validate private key / connectivity
-                    hub = P2PDevice(
-                        hass=self.hass,
-                        ipv4=host,
-                        port=port,
-                        private_key=firmware_response.private_key,
-                    )
-                    await hub.async_get_status()
-
-                    return {
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                        CONF_SERIAL_NUMBER: serial_number,
-                        CONF_PRIVATE_KEY: firmware_response.private_key,
-                        CONF_FIRMWARE: firmware_response.firmware,
-                    }
-                except P2PError as err:
-                    errors["base"] = err.error
-
-        except ConnectionError:
-            errors["base"] = "cannot_connect"
-        except P2PError as err:
-            errors["base"] = err.error
-
+    The device answers this packet to anyone, using the serial number as the key.
+    """
+    try:
+        firmware = await P2PDevice(host, port, serial_number).async_get_firmware()
+    except P2PError as err:
+        errors["base"] = err.error
         return None
+
+    if firmware.serial_number != serial_number:
+        errors["base"] = "serial_number_mismatch"
+    elif firmware.firmware < MIN_FIRMWARE:
+        errors["base"] = "firmware_not_supported"
+    else:
+        return firmware
+    return None
+
+
+async def _async_check_key(
+    errors: dict[str, str], host: str, port: int, private_key: int
+) -> bool:
+    """Check that the device accepts a status request with this key."""
+    try:
+        await P2PDevice(host, port, private_key).async_get_status()
+    except P2PError as err:
+        errors["base"] = err.error
+        return False
+    return True
+
+
+async def async_validate_new_device(
+    errors: dict[str, str], host: str, port: int, serial_number: int
+) -> dict[str, Any] | None:
+    """Fetch the private key from a device in setup mode.
+
+    Used when adding a device and when re-authenticating. Returns the config
+    entry data, or None with `errors` filled in.
+    """
+    firmware = await _async_get_firmware(errors, host, port, serial_number)
+    if firmware is None:
+        return None
+    if firmware.mode == 0:
+        errors["base"] = "device_must_be_in_setup_mode_to_get_private_key"
+        return None
+    if firmware.private_key == 0:
+        errors["base"] = "failed_to_get_private_key"
+        return None
+    if not await _async_check_key(errors, host, port, firmware.private_key):
+        return None
+    return {
+        CONF_HOST: host,
+        CONF_PORT: port,
+        CONF_SERIAL_NUMBER: serial_number,
+        CONF_PRIVATE_KEY: firmware.private_key,
+        CONF_FIRMWARE: firmware.firmware,
+    }
+
+
+async def async_validate_connection(
+    errors: dict[str, str],
+    host: str,
+    port: int,
+    serial_number: int,
+    private_key: int,
+) -> dict[str, Any] | None:
+    """Check a new host/port for an already-added device.
+
+    Setup mode isn't needed: the saved key is checked instead. If the device
+    happens to be in setup mode, its key is refreshed. Returns the data to
+    update, or None with `errors` filled in.
+    """
+    firmware = await _async_get_firmware(errors, host, port, serial_number)
+    if firmware is None:
+        return None
+    if firmware.mode != 0 and firmware.private_key != 0:
+        private_key = firmware.private_key
+    if not await _async_check_key(errors, host, port, private_key):
+        return None
+    return {
+        CONF_HOST: host,
+        CONF_PORT: port,
+        CONF_PRIVATE_KEY: private_key,
+        CONF_FIRMWARE: firmware.firmware,
+    }

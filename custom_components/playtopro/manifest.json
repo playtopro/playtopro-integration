@@ -1,22 +1,17 @@
 {
   "domain": "playtopro",
   "name": "Playtopro",
+  "after_dependencies": ["frontend", "lovelace"],
   "codeowners": ["@playtopro"],
   "config_flow": true,
-  "dependencies": ["http", "frontend", "lovelace"],
+  "dependencies": ["http"],
   "documentation": "https://www.home-assistant.io/integrations/playtopro-integration",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "loggers": ["custom_components.playtopro"],
   "quality_scale": "internal",
   "zeroconf": [
     {
       "type": "_playtopro._tcp.local."
     }
-  ],
-  "frontend": {
-    "extra_module_url": [
-      "/custom_components/playtopro/frontend/playtopro-card.js"
-    ]
-  }
+  ]
 }

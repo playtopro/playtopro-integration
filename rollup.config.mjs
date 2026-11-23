@@ -11,7 +11,7 @@ export default {
     // ⬇️ Build straight into the integration so HA can auto-load it
     file: "custom_components/playtopro/frontend/playtopro-card.js",
     format: "es",
-    sourcemap: !isProd ? "inline" : true,
+    sourcemap: isProd ? false : "inline",
     inlineDynamicImports: true, // fold everything into one file
   },
   plugins: [

@@ -33,40 +33,83 @@
 # python3 -m script.translations develop
 
 from __future__ import annotations
-from homeassistant.config_entries import ConfigEntry
+
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
+from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
-from .coordinator import P2PDataUpdateCoordinator
-
-# NEW: import the helper functions
+from .const import CONF_SERIAL_NUMBER, DOMAIN, LOGGER
+from .coordinator import P2PConfigEntry, P2PDataUpdateCoordinator
 from .frontend import JSModuleRegistration
+from .P2PDevice import ZONE_COUNT
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up lichen playtopro from a config entry."""
-
-    # Register static path so /playtopro/playtopro-card.js is served
-
-    hass.data.setdefault(DOMAIN, {})
-    entry.runtime_data = P2PDataUpdateCoordinator(hass, entry=entry)
-    await entry.runtime_data.async_config_entry_first_refresh()
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Register custom cards
-    module_register = JSModuleRegistration(hass)
-    await module_register.async_register()
-
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Serve the card and add it to the dashboard resources, once."""
+    await JSModuleRegistration(hass).async_register()
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: P2PConfigEntry) -> bool:
+    """Set up lichen playtopro from a config entry."""
+    coordinator = P2PDataUpdateCoordinator(hass, entry)
+    await coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = coordinator
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: P2PConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: P2PConfigEntry) -> None:
+    """Remove the card resource when the last device is removed."""
+    if not any(
+        other.entry_id != entry.entry_id
+        for other in hass.config_entries.async_entries(DOMAIN)
+    ):
+        await JSModuleRegistration(hass).async_unregister()
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: P2PConfigEntry) -> bool:
+    """Migrate entries created by older versions."""
+    if entry.version > 1:
+        return False
+
+    if entry.minor_version < 2:
+        serial_number = str(entry.data[CONF_SERIAL_NUMBER])
+
+        # The device identifier used to be an int; it must be a str.
+        device_registry = dr.async_get(hass)
+        device = device_registry.async_get_device(
+            identifiers={(DOMAIN, int(serial_number))}  # type: ignore[arg-type]
+        )
+        if device is not None:
+            device_registry.async_update_device(
+                device.id, new_identifiers={(DOMAIN, serial_number)}
+            )
+
+        # Zone sensors moved from the sensor to the binary_sensor platform.
+        entity_registry = er.async_get(hass)
+        for index in range(ZONE_COUNT):
+            if entity_id := entity_registry.async_get_entity_id(
+                Platform.SENSOR, DOMAIN, f"{serial_number}_zone_{index:02d}"
+            ):
+                entity_registry.async_remove(entity_id)
+
+        hass.config_entries.async_update_entry(entry, minor_version=2)
+        LOGGER.debug("Migrated %s to version 1.2", entry.title)
+
+    return True
